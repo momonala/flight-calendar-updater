@@ -1,0 +1,29 @@
+google_application_credentials.json
+values.py
+
+# Compiled source #
+build/
+python/
+__pycache__/
+.cache/
+.ipython/
+.jupyter/
+.local/
+
+# Project Files
+*.py[cod]
+*$py.class
+.ipynb*
+venv/
+.vscode
+*.egg-info/
+tmp/
+.coverage
+
+# OS generated files
+.DS_Store
+
+# IDEs
+.dir-locals.el
+.envrc
+.idea/

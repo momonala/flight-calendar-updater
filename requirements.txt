@@ -1,0 +1,7 @@
+pandas
+pytz
+requests
+airportsdata
+beautifulsoup4
+pycountry
+country_converter
