@@ -85,6 +85,7 @@ def main():
     for i, row in enumerate(rows):
         if i == 0:  # skip header
             continue
+
         row = [row[x] if x < len(row) else None for x in range(len(header))]
         row = OrderedDict(zip(header, row))
 
@@ -101,12 +102,11 @@ def main():
             )
             continue
 
+        print("-" * 100)
         flight_info = get_flight_info(event_start, flight_no)
         if not flight_info:
             logger.error(f"❌ failed to get flight for: {event_date=} {flight_no=}")
             continue
-
-        print("-" * 100)
 
         event_id = create_or_update_gcal_event(flight_info, row["gcal_event_id"])
         new_row = OrderedDict(

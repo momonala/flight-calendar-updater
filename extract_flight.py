@@ -80,6 +80,8 @@ def get_flight_info(date: datetime, flight_number: str) -> FlightInfo | None:
     try:
         response = make_flight_info_request(date, flight_number)
         flight_info = parse_response(response)
+        if not flight_info:
+            return
         processed_flight_info = process_flight_info(flight_info)
         correct_flight_dates_inplace(date, processed_flight_info)
         # print(processed_flight_info)
@@ -119,6 +121,9 @@ def make_flight_info_request(date: datetime, flight_number: str) -> str:
 def parse_response(response_text: str) -> dict[str, str]:
     """Extracts flight info from HTTP response. No post processing done yet."""
     soup = BeautifulSoup(response_text, "html.parser")
+    if soup.find("div", class_="nr"):
+        logger.warning("No flights are available for this departure date. Please select another date and try again.")
+        return {}
     stz = soup.find_all("div", class_="stp stz")
     stv = soup.find_all("div", class_="stv")
     stp = soup.find_all("div", class_="stp")
