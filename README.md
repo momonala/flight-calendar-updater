@@ -1,6 +1,6 @@
 # Flight Calendar Updater
 
-A Python tool that automatically fetches flight details and keeps your Google Calendar updated with comprehensive flight information from a Google Sheets tracker.
+A Python tool that automatically fetches flight details and keeps your Google Calendar updated with comprehensive flight information from a Google Sheets tracker. Can run as a cron service with `scheduler.py` and `install/projects_flight_calendar_updater.service`
 
 ## Features
 
@@ -22,8 +22,9 @@ git clone https://github.com/yourusername/flight-calendar-updater.git
 cd flight-calendar-updater
 ```
 
-2. Install required packages:
+2. Install reqguired packages:
 ```bash
+conda create -n flight_calendar_updater python=3.12 -y
 pip install poetry
 poetry install
 ```
@@ -37,44 +38,20 @@ poetry install
 
 4. Create a `values.py` file with your configuration:
 ```python
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-import pickle
-import os
+from google.oauth2 import service_account
 
-# If modifying these scopes, delete the token.pickle file.
+# Set up credentials
+SERVICE_ACCOUNT_FILE = "google_application_credentials.json"
 SCOPES = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/calendar'
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/spreadsheets",
 ]
 
-# Your Google Calendar ID (found in calendar settings)
-CALENDAR_ID = 'your_calendar_id@group.calendar.google.com'
+SPREADSHEET_ID = ""
+RANGE_NAME = "raw!A:ZZ"
+CALENDAR_ID = ""
+credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 
-# Your Google Sheets ID (from the URL)
-SPREADSHEET_ID = 'your_spreadsheet_id'
-
-# The range in your sheet (including the header row)
-RANGE_NAME = 'raw!A1:ZZ'
-
-def get_credentials():
-    creds = None
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
-    return creds
-
-credentials = get_credentials()
 ```
 
 ## Usage
@@ -117,6 +94,6 @@ The script will:
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.12+
 - Google account with Calendar and Sheets access
-- Required Python packages (see requirements.txt) 
+- Required Python packages (see pyproject.toml) 
