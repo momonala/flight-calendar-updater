@@ -93,12 +93,8 @@ def get_flight_info(date: datetime, flight_number: str) -> FlightInfo | None:
 
 def correct_flight_dates_inplace(date: datetime, processed_flight_info: FlightInfo):
     """Corrects flight dates, if needed. Inplace mutation."""
-    processed_flight_info.departure_time = processed_flight_info.departure_time.replace(
-        year=date.year
-    )
-    processed_flight_info.arrival_time = processed_flight_info.arrival_time.replace(
-        year=date.year
-    )
+    processed_flight_info.departure_time = processed_flight_info.departure_time.replace(year=date.year)
+    processed_flight_info.arrival_time = processed_flight_info.arrival_time.replace(year=date.year)
 
 
 def make_flight_info_request(date: datetime, flight_number: str) -> str:
@@ -122,7 +118,9 @@ def parse_response(response_text: str) -> dict[str, str]:
     """Extracts flight info from HTTP response. No post processing done yet."""
     soup = BeautifulSoup(response_text, "html.parser")
     if soup.find("div", class_="nr"):
-        logger.warning("No flights are available for this departure date. Please select another date and try again.")
+        logger.warning(
+            "No flights are available for this departure date. Please select another date and try again."
+        )
         return {}
     stz = soup.find_all("div", class_="stp stz")
     stv = soup.find_all("div", class_="stv")
@@ -192,9 +190,7 @@ def parse_duration(duration_str: str) -> timedelta:
 
 
 def process_flight_info(raw_flight_info) -> FlightInfo:
-    departure_airport = extract_airport_code(
-        raw_flight_info.get("departure_airport", "")
-    )
+    departure_airport = extract_airport_code(raw_flight_info.get("departure_airport", ""))
     arrival_airport = extract_airport_code(raw_flight_info.get("arrival_airport", ""))
     return FlightInfo(
         flight_number=raw_flight_info.get("flight_number"),

@@ -1,12 +1,12 @@
 import logging
+from collections import OrderedDict
 from datetime import datetime
 
 import pandas as pd
 from googleapiclient.discovery import build
-from collections import OrderedDict
 
-from extract_flight import get_flight_info, FlightInfo
-from values import SPREADSHEET_ID, RANGE_NAME, CALENDAR_ID, credentials
+from extract_flight import FlightInfo, get_flight_info
+from values import CALENDAR_ID, RANGE_NAME, SPREADSHEET_ID, credentials
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -21,7 +21,9 @@ gcal_client = calendar_service.events()
 
 
 def create_or_update_gcal_event(flight_info: FlightInfo, event_id: str | None):
-    event_description = f"✈️ {flight_info.departure_airport} → {flight_info.arrival_airport} {flight_info.flight_number}"
+    event_description = (
+        f"✈️ {flight_info.departure_airport} → {flight_info.arrival_airport} {flight_info.flight_number}"
+    )
     event = {
         "summary": event_description,
         "start": {
@@ -51,9 +53,7 @@ def update_row_with_formulas(row_index: int, new_row: OrderedDict):
 
     # Add formulas for 'Date' and Weekday
     date_formula = f"=DATE(A{row_index}, MONTH(B{row_index}&1), C{row_index})"
-    weekday_formula = (
-        f'=TEXT(E{row_index}, "DDD")'  # Abbreviated weekday name, e.g., "Fri"
-    )
+    weekday_formula = f'=TEXT(E{row_index}, "DDD")'  # Abbreviated weekday name, e.g., "Fri"
 
     # Replace 'Date' and 'Weekday' columns with formulas
     date_column_index = list(new_row.keys()).index("Date")
@@ -69,16 +69,12 @@ def update_row_with_formulas(row_index: int, new_row: OrderedDict):
         valueInputOption="USER_ENTERED",
         body={"values": [row_values]},
     ).execute()
-    logger.info(
-        f"✅ Row updated {row_index_range=} {new_row['Date']} {new_row['Flight #']}"
-    )
+    logger.info(f"✅ Row updated {row_index_range=} {new_row['Date']} {new_row['Flight #']}")
 
 
 def main():
     # Read data from Google Sheets
-    result = (
-        sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
-    )
+    result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
     rows = result.get("values", [])
     header = rows[0]
 
@@ -97,9 +93,7 @@ def main():
             logger.debug(f"❌ skipping: no values found for {event_date=} {flight_no=}")
             continue
         if event_start < datetime.now():
-            logger.debug(
-                f"❌ skipping: flight is in the past {event_date=} {flight_no=}"
-            )
+            logger.debug(f"❌ skipping: flight is in the past {event_date=} {flight_no=}")
             continue
 
         print("-" * 100)
