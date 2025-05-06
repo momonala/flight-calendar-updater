@@ -1,0 +1,29 @@
+[tool.black]
+line-length = 110
+target-version = ['py312']
+include = '\.py'
+
+[tool.poetry]
+name = "flight_calendar_updater"
+version = "0.1.0"
+description = ""
+authors = ["momonala <mnalavadi@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.12.*"
+google-api-python-client = "2.*"
+google-auth-httplib2 = "0.*"
+google-auth-oauthlib = "0.*"
+pandas = "*"
+requests = "2.*"
+beautifulsoup4 = "4.*"
+airportsdata = "*"
+country-converter = "1.*"
+pycountry = "22.*"
+pytz = "*"
+scheduler = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
