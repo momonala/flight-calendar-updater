@@ -21,9 +21,7 @@ gcal_client = calendar_service.events()
 
 
 def create_or_update_gcal_event(flight_info: FlightInfo, event_id: str | None):
-    event_description = (
-        f"✈️ {flight_info.departure_airport} → {flight_info.arrival_airport} {flight_info.flight_number}"
-    )
+    event_description = f"✈️ {flight_info.departure_airport} → {flight_info.arrival_airport} {flight_info.flight_number}"
     event = {
         "summary": event_description,
         "start": {
