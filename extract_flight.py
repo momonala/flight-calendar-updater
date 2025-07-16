@@ -9,6 +9,7 @@ import pycountry
 import pytz
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -97,19 +98,38 @@ def correct_flight_dates_inplace(date: datetime, processed_flight_info: FlightIn
     processed_flight_info.arrival_time = processed_flight_info.arrival_time.replace(year=date.year)
 
 
+def cleanse_flight_url(flight_url: str, date: datetime) -> str:
+    "Cleanses the flight URL and add the correct date parameter."
+    date_to_pass = date.strftime("%Y-%m-%d")
+    parsed = urlparse(flight_url)
+    query_params = parse_qs(parsed.query)
+    query_params["date"] = [date_to_pass]
+    new_query = urlencode(query_params, doseq=True)
+    flight_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+    return flight_url
+
+
 def make_flight_info_request(date: datetime, flight_number: str) -> str:
     """Scrapes the web for flight info. Just gets the HTTP response."""
     # do the flight search
-    flight_search_url = "https://aviability.com/flight-number/index.php"
-    payload = {"FlightNumber": flight_number}
+    flight_search_url = "https://aviability.com/en/flight/"
+    payload = {"fn": flight_number.upper()}
     response = requests.post(flight_search_url, data=payload)
     response.raise_for_status()
 
+    # Parse the response to find the flight-specific URL
+    # Look for the flight URL - it should be something like /en/flight/ba999-british-airways
+    soup = BeautifulSoup(response.content, "html.parser")
+    flight_link = soup.find(
+        "a", href=lambda x: x and x.startswith("/en/flight/") and flight_number.lower().replace(" ", "") in x.lower()
+    )
+    if not flight_link:
+        raise RuntimeError(f"Flight URL for {flight_number} not found in the response.")
+
     # then the flight info search
-    info_search_url = response.url
-    date_to_pass = date.strftime("%Y-%m-%d")
-    payload = {"_date": date_to_pass}
-    response = requests.post(info_search_url, data=payload)
+    flight_url = "https://aviability.com" + flight_link["href"]
+    flight_url = cleanse_flight_url(flight_url, date)
+    response = requests.get(flight_url)
     response.raise_for_status()
     return response.text
 
@@ -117,39 +137,115 @@ def make_flight_info_request(date: datetime, flight_number: str) -> str:
 def parse_response(response_text: str) -> dict[str, str]:
     """Extracts flight info from HTTP response. No post processing done yet."""
     soup = BeautifulSoup(response_text, "html.parser")
-    if soup.find("div", class_="nr"):
-        logger.warning(
-            "No flights are available for this departure date. Please select another date and try again."
-        )
+
+    # Check for no flights available
+    if "No flights are available" in response_text:
+        logger.warning("No flights are available for this departure date.")
         return {}
-    stz = soup.find_all("div", class_="stp stz")
-    stv = soup.find_all("div", class_="stv")
-    stp = soup.find_all("div", class_="stp")
+
+    # Extract flight number and airline from h1 tag
+    h1 = soup.find("h1")
+    if not h1:
+        logger.warning("Could not find flight information in response")
+        return {}
+
+    h1_text = h1.get_text(strip=True)
+    # Example: "BA 999 British Airways from Berlin to London on 19 July 2025"
+    parts = h1_text.split()
+    flight_number = f"{parts[0]} {parts[1]}"  # "BA 999"
+    airline = parts[2]  # "British Airways"
+
+    # Extract aircraft from meta description
+    meta_desc = soup.find("meta", {"name": "Description"})
+    aircraft = ""
+    if meta_desc and "Plane" in meta_desc.get("content", ""):
+        content = meta_desc.get("content")
+        aircraft_part = content.split("Plane ")[1].split(",")[0] if "Plane " in content else ""
+        aircraft = aircraft_part
+
+    # Extract route information from the structured sections
+    flight_details_section = soup.find("section", class_="Yh")
+    
+    if not flight_details_section:
+        logger.warning("Could not find flight details section")
+        return {}
+
+    # Extract countries from the route section
+    countries_div = flight_details_section.find("div", class_="mh")
+    country_divs = countries_div.find_all("div", class_="Wh") if countries_div else []
+    departure_country = country_divs[0].get_text(strip=True) if len(country_divs) > 0 else ""
+    arrival_country = country_divs[1].get_text(strip=True) if len(country_divs) > 1 else ""
+
+    # Extract airport names
+    airports_div = flight_details_section.find("div", class_="rh")
+    airport_divs = airports_div.find_all("div", class_="Wh") if airports_div else []
+    departure_airport = airport_divs[0].get_text(strip=True) if len(airport_divs) > 0 else ""
+    arrival_airport = airport_divs[1].get_text(strip=True) if len(airport_divs) > 1 else ""
+
+    # Extract airport codes
+    codes_div = flight_details_section.find("div", class_="Fh")
+    code_divs = codes_div.find_all("div", class_="Wh") if codes_div else []
+    dep_code = code_divs[0].get_text(strip=True) if len(code_divs) > 0 else ""
+    arr_code = code_divs[1].get_text(strip=True) if len(code_divs) > 1 else ""
+
+    # Extract terminals
+    terminals_div = flight_details_section.find("div", class_="uh")
+    terminal_divs = terminals_div.find_all("div", class_="Wh") if terminals_div else []
+    departure_terminal = terminal_divs[0].get_text(strip=True) if len(terminal_divs) > 0 else ""
+    arrival_terminal = terminal_divs[1].get_text(strip=True) if len(terminal_divs) > 1 else ""
+
+    # Extract flight times
+    times_div = flight_details_section.find("div", class_="kh")
+    time_divs = times_div.find_all("div", class_="Wh") if times_div else []
+    departure_datetime = time_divs[0].get_text(strip=True) if len(time_divs) > 0 else ""
+    arrival_datetime = time_divs[1].get_text(strip=True) if len(time_divs) > 1 else ""
+
+    # Extract time and date parts
+    # Format: "Sep 30, 07:00"
+    if departure_datetime:
+        dep_parts = departure_datetime.split(", ")
+        departure_date = dep_parts[0] if len(dep_parts) > 0 else ""
+        departure_time = dep_parts[1] if len(dep_parts) > 1 else ""
+    else:
+        departure_date = departure_time = ""
+
+    if arrival_datetime:
+        arr_parts = arrival_datetime.split(", ")
+        arrival_date = arr_parts[0] if len(arr_parts) > 0 else ""
+        arrival_time = arr_parts[1] if len(arr_parts) > 1 else ""
+    else:
+        arrival_date = arrival_time = ""
+
+    # Extract duration
+    duration_div = flight_details_section.find("div", class_="Ih")
+    duration = ""
+    if duration_div:
+        duration_text = duration_div.get_text(strip=True)
+        # Format: "Flight duration 2h 5 min"
+        duration = duration_text.replace("Flight duration ", "")
+
+    # Extract aircraft
+    aircraft_div = flight_details_section.find("div", class_="ih")
+    if aircraft_div:
+        aircraft = aircraft_div.get_text(strip=True)
 
     flight_info = {
-        "flight_number": soup.find("div", class_="stn").get_text(strip=True),
-        "airline": soup.find("div", class_="sta").get_text(strip=True),
-        "departure_airport": stz[0].get_text(strip=True),
-        "arrival_airport": stz[1].get_text(strip=True),
-        "departure_time": stv[0].get_text(strip=True),
-        "arrival_time": stv[1].get_text(strip=True),
-        "departure_country": stp[2].get_text(strip=True),
-        "arrival_country": stp[3].get_text(strip=True),
-        "departure_date": stp[-2].get_text(strip=True),
-        "arrival_date": stp[-1].get_text(strip=True),
+        "flight_number": flight_number,
+        "airline": airline,
+        "departure_airport": f"{departure_airport} ({dep_code})",
+        "arrival_airport": f"{arrival_airport} ({arr_code})",
+        "departure_time": departure_time,
+        "arrival_time": arrival_time,
+        "departure_country": departure_country,
+        "arrival_country": arrival_country,
+        "departure_date": departure_date,
+        "arrival_date": arrival_date,
+        "departure_terminal": departure_terminal,
+        "arrival_terminal": arrival_terminal,
+        "duration": duration,
+        "aircraft": aircraft,
     }
 
-    if len(stp) >= 8:
-        flight_info["departure_terminal"] = stp[4].get_text(strip=True)
-        flight_info["arrival_terminal"] = stp[5].get_text(strip=True)
-
-    html_for_aircraft_and_duration = soup.find_all("div", class_="stg stu")
-    for html in html_for_aircraft_and_duration:
-        html = html.get_text(strip=True)
-        if html.startswith("Flight duration"):
-            flight_info["duration"] = html.replace("Flight duration: ", "")
-        else:
-            flight_info["aircraft"] = html
     return flight_info
 
 
@@ -172,7 +268,14 @@ def extract_city_from_airport(airport_code: str) -> str:
 
 def convert_to_datetime(date_str: str, time_str: str, airport_code: str) -> datetime:
     timezone = pytz.timezone(airports[airport_code]["tz"])
-    date_obj = datetime.strptime(date_str, "%B %d, %A")
+
+    # Handle new date format: "Jul 19" instead of "July 19, Saturday"
+    try:
+        date_obj = datetime.strptime(date_str, "%b %d")
+    except ValueError:
+        # Fallback to old format if needed
+        date_obj = datetime.strptime(date_str, "%B %d, %A")
+
     time_obj = datetime.strptime(time_str, "%H:%M").time()
     combined_datetime = datetime.combine(date_obj, time_obj)
     combined_datetime = combined_datetime.replace(year=datetime.now().year)

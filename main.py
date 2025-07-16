@@ -21,9 +21,7 @@ gcal_client = calendar_service.events()
 
 
 def create_or_update_gcal_event(flight_info: FlightInfo, event_id: str | None):
-    event_description = (
-        f"✈️ {flight_info.departure_airport} → {flight_info.arrival_airport} {flight_info.flight_number}"
-    )
+    event_description = f"✈️ {flight_info.departure_airport} → {flight_info.arrival_airport} {flight_info.flight_number}"
     event = {
         "summary": event_description,
         "start": {
@@ -69,7 +67,8 @@ def update_row_with_formulas(row_index: int, new_row: OrderedDict):
         valueInputOption="USER_ENTERED",
         body={"values": [row_values]},
     ).execute()
-    logger.info(f"✅ Row updated {row_index_range=} {new_row['Date']} {new_row['Flight #']}")
+
+    logger.info(f"\033[92m✅ Row updated\033[0m | \033[94mRow:\033[0m {row_index_range} | \033[93mDate:\033[0m {new_row['Date']} | \033[96mFlight:\033[0m {new_row['Flight #']}")
 
 
 def main():
@@ -103,13 +102,14 @@ def main():
             continue
 
         event_id = create_or_update_gcal_event(flight_info, row["gcal_event_id"])
+        date = flight_info.departure_time.strftime("%Y-%m-%d")
         new_row = OrderedDict(
             [
                 ("Year", row["Year"]),
                 ("Month", row["Month"]),
                 ("Day", row["Day"]),
                 ("Weekday", "Fri"),
-                ("Date", "Feb 14,2025 "),
+                ("Date", date),
                 ("Flight #", row["Flight #"]),
                 ("Departure Airport", flight_info.departure_airport),
                 ("Arrival Airport", flight_info.arrival_airport),
