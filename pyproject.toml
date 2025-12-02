@@ -20,9 +20,11 @@ requests = "2.*"
 beautifulsoup4 = "4.*"
 airportsdata = "*"
 country-converter = "1.*"
-pycountry = "22.*"
+pycountry = "24.*"
 pytz = "*"
 scheduler = "*"
+brotli = "^1.2.0"
+zstandard = "^0.25.0"
 
 [build-system]
 requires = ["poetry-core"]
