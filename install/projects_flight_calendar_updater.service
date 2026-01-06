@@ -2,11 +2,11 @@
  Description=Flight Calendar Updater Service
  After=multi-user.target
 
- [Service]
- WorkingDirectory=/home/mnalavadi/flight-calendar-updater 
- Type=idle
- ExecStart=/home/mnalavadi/miniconda3/envs/flight_calendar_updater/bin/python scheduler.py
- User=mnalavadi
+[Service]
+WorkingDirectory=/home/mnalavadi/flight-calendar-updater 
+Type=idle
+ExecStart=/home/mnalavadi/.local/bin/uv run python -m src.scheduler
+User=mnalavadi
 
  [Install]
  WantedBy=multi-user.target

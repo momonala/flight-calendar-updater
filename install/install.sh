@@ -1,23 +1,18 @@
-
 service_name="flight_calendar_updater"
-python_version="3.12"
 
 set -e  # Exit immediately if a command exits with a non-zero status
 
-echo "✅ Creating conda environment: $service_name with Python $python_version"
-if ! conda env list | grep -q "^$service_name\s"; then
-    conda create -n $service_name python=$python_version -y
+echo "✅ Installing uv (Python package manager)"
+if ! command -v uv &> /dev/null; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 else
-    echo "✅ Conda environment '$service_name' already exists. Skipping creation."
-    source /home/mnalavadi/miniconda3/etc/profile.d/conda.sh
+    echo "✅ uv is already installed. Updating to latest version."
+    uv self update
 fi
 
-echo "✅ Activating conda environment: $service_name"
-conda activate $service_name
-
-echo "✅ Installing required Python packages"
-pip install -U poetry
-poetry install --no-root
+echo "✅ Installing project dependencies with uv"
+uv sync
 
 echo "✅ Copying service file to systemd directory"
 sudo cp install/projects_${service_name}.service /lib/systemd/system/projects_${service_name}.service
