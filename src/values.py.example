@@ -1,0 +1,14 @@
+# Stub values for CI/testing - copy to values.py for local development
+
+from google.oauth2 import service_account
+
+SERVICE_ACCOUNT_FILE = "google_application_credentials.json"
+SCOPES = [
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/spreadsheets",
+]
+
+SPREADSHEET_ID = "dummy_spreadsheet_id"
+RANGE_NAME = "raw!A:ZZ"
+CALENDAR_ID = "dummy@example.com"
+credentials = None

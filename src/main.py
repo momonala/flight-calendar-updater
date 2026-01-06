@@ -5,8 +5,8 @@ from datetime import datetime
 import pandas as pd
 from googleapiclient.discovery import build
 
-from extract_flight import FlightInfo, get_flight_info
-from values import CALENDAR_ID, RANGE_NAME, SPREADSHEET_ID, credentials
+from src.extract_flight import FlightInfo, get_flight_info
+from src.values import CALENDAR_ID, RANGE_NAME, SPREADSHEET_ID, credentials
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -21,7 +21,9 @@ gcal_client = calendar_service.events()
 
 
 def create_or_update_gcal_event(flight_info: FlightInfo, event_id: str | None):
-    event_description = f"✈️ {flight_info.departure_airport} → {flight_info.arrival_airport} {flight_info.flight_number}"
+    event_description = (
+        f"✈️ {flight_info.departure_airport} → {flight_info.arrival_airport} {flight_info.flight_number}"
+    )
     event = {
         "summary": event_description,
         "start": {
@@ -68,7 +70,9 @@ def update_row_with_formulas(row_index: int, new_row: OrderedDict):
         body={"values": [row_values]},
     ).execute()
 
-    logger.info(f"\033[92m✅ Row updated\033[0m | \033[94mRow:\033[0m {row_index_range} | \033[93mDate:\033[0m {new_row['Date']} | \033[96mFlight:\033[0m {new_row['Flight #']}")
+    logger.info(
+        f"\033[92m✅ Row updated\033[0m | \033[94mRow:\033[0m {row_index_range} | \033[93mDate:\033[0m {new_row['Date']} | \033[96mFlight:\033[0m {new_row['Flight #']}"
+    )
 
 
 def main():

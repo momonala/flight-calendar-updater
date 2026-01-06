@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pprint import pprint as print
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import airportsdata
 import country_converter as coco
@@ -9,7 +9,6 @@ import pycountry
 import pytz
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -104,7 +103,9 @@ def cleanse_flight_url(flight_url: str, date: datetime) -> str:
     query_params = parse_qs(parsed.query)
     query_params["date"] = [date_to_pass]
     new_query = urlencode(query_params, doseq=True)
-    flight_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+    flight_url = urlunparse(
+        (parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment)
+    )
     return flight_url
 
 
@@ -136,12 +137,17 @@ def make_flight_info_request(date: datetime, flight_number: str) -> str:
     # Parse the response to find the flight-specific URL
     # Look for the flight URL - it should be something like /en/flight/ba999-british-airways
     soup = BeautifulSoup(response.content, "html.parser")
-    
+
     flight_link = soup.find(
-        "a", href=lambda x: x and x.startswith("/en/flight/") and flight_number.lower().replace(" ", "") in x.lower()
+        "a",
+        href=lambda x: x
+        and x.startswith("/en/flight/")
+        and flight_number.lower().replace(" ", "") in x.lower(),
     )
     if not flight_link:
-        raise RuntimeError(f"Flight URL for {flight_number} on {date.strftime('%Y-%m-%d')} not found in the response.")
+        raise RuntimeError(
+            f"Flight URL for {flight_number} on {date.strftime('%Y-%m-%d')} not found in the response."
+        )
 
     # then the flight info search
     flight_url = "https://aviability.com" + flight_link["href"]
@@ -168,7 +174,7 @@ def parse_response(response_text: str) -> dict[str, str]:
     h1_text = h1.get_text(strip=True)
     parts = h1_text.split()
     flight_number = f"{parts[0]} {parts[1]}"
-    airline = " ".join(parts[2:parts.index("from")])
+    airline = " ".join(parts[2 : parts.index("from")])
 
     # Aircraft from meta description: "...Plane Airbus A220-100, Duration..."
     meta_desc = soup.find("meta", {"name": "Description"})

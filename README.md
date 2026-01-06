@@ -1,5 +1,8 @@
 # Flight Calendar Updater
 
+[![CI](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml/badge.svg)](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/momonala/flight-calendar-updater/branch/main/graph/badge.svg)](https://codecov.io/gh/momonala/flight-calendar-updater)
+
 Syncs flight details from a Google Sheet to Google Calendar by scraping flight data from aviability.com.
 
 ## Tech Stack
@@ -16,9 +19,9 @@ flowchart LR
         GC[Google Calendar]
     end
     subgraph App
-        M[main.py]
-        EF[extract_flight.py]
-        SCH[scheduler.py]
+        M[src/main.py]
+        EF[src/extract_flight.py]
+        SCH[src/scheduler.py]
     end
     
     GS -->|read flight #, date| M
@@ -34,7 +37,7 @@ flowchart LR
 ## Prerequisites
 
 - Python 3.12+
-- Poetry
+- uv (Python package manager)
 - Google Cloud project with:
   - Sheets API enabled
   - Calendar API enabled
@@ -46,7 +49,8 @@ flowchart LR
    ```bash
    git clone https://github.com/momonala/flight-calendar-updater.git
    cd flight-calendar-updater
-   poetry install
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   uv sync
    ```
 
 2. Set up Google credentials:
@@ -56,7 +60,7 @@ flowchart LR
    - Share your Google Sheet with the service account email
    - Share your Google Calendar with the service account email
 
-3. Configure `values.py`:
+3. Configure `src/values.py`:
    ```python
    from google.oauth2 import service_account
 
@@ -78,25 +82,26 @@ flowchart LR
 
 ```bash
 # One-time run
-python main.py
+python -m src.main
 
 # As daemon (runs daily at midnight)
-python scheduler.py
+python -m src.scheduler
 ```
 
 ## Project Structure
 
 ```
 flight-calendar-updater/
-├── main.py                 # Entry point: orchestrates sheet read → scrape → calendar update
-├── extract_flight.py       # Flight scraping & parsing from aviability.com
-├── scheduler.py            # Daily cron wrapper using schedule library
-├── values.py               # Config: Google credentials, sheet/calendar IDs
+├── src/
+│   ├── main.py             # Entry point: orchestrates sheet read → scrape → calendar update
+│   ├── extract_flight.py   # Flight scraping & parsing from aviability.com
+│   ├── scheduler.py        # Daily cron wrapper using schedule library
+│   └── values.py           # Config: Google credentials, sheet/calendar IDs
 ├── google_application_credentials.json  # Service account key (not committed)
 ├── pyproject.toml          # Dependencies
 └── install/
     ├── install.sh          # Linux systemd setup script
-    └── projects_flight_calendar_updater.service  # systemd unit file
+    └── projects_flight-calendar-updater.service  # systemd unit file
 ```
 
 ## Key Concepts
@@ -140,7 +145,7 @@ cd install
 ./install.sh
 ```
 
-This creates a conda environment, installs dependencies, and enables a systemd service that runs `scheduler.py` continuously.
+This installs uv (if not already installed), installs dependencies, and enables a systemd service that runs `scheduler.py` continuously.
 
 ## External Dependencies
 
