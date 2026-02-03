@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 from googleapiclient.discovery import build
 
-from src.extract_flight import FlightInfo, get_flight_info
+from src.extract_flight_ai import FlightInfo, get_flight_info
 from src.values import CALENDAR_ID, RANGE_NAME, SPREADSHEET_ID, credentials
 
 logging.basicConfig()
@@ -24,15 +24,19 @@ def create_or_update_gcal_event(flight_info: FlightInfo, event_id: str | None):
     event_description = (
         f"✈️ {flight_info.departure_airport} → {flight_info.arrival_airport} {flight_info.flight_number}"
     )
+    start = flight_info.departure_time
+    end = flight_info.arrival_time
+    if end <= start:
+        end = start + flight_info.duration
     event = {
         "summary": event_description,
         "start": {
-            "dateTime": flight_info.departure_time.isoformat(),
-            "timeZone": flight_info.departure_time.tzinfo.zone,  # noqa
+            "dateTime": start.isoformat(),
+            "timeZone": start.tzinfo.zone,
         },
         "end": {
-            "dateTime": flight_info.arrival_time.isoformat(),
-            "timeZone": flight_info.arrival_time.tzinfo.zone,  # noqa
+            "dateTime": end.isoformat(),
+            "timeZone": end.tzinfo.zone,
         },
         "description": flight_info.as_gcal_description(),
     }
