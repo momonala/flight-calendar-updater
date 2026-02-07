@@ -3,92 +3,20 @@ from collections import OrderedDict
 from datetime import datetime
 
 import pandas as pd
-from googleapiclient.discovery import build
 
-from src.extract_flight_ai import FlightInfo, get_flight_info
-from src.values import CALENDAR_ID, RANGE_NAME, SPREADSHEET_ID, credentials
+from src.calendar_client import create_or_update_gcal_event
+from src.extract_flight_ai import get_flight_info
+from src.sheets_client import fetch_flights_google_doc, update_row_with_formulas
 
-logging.basicConfig()
 logger = logging.getLogger(__name__)
-logging.getLogger().setLevel(logging.INFO)
-
-
-# Authenticate and build services
-sheets_service = build("sheets", "v4", credentials=credentials, cache_discovery=False)
-calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
-sheet = sheets_service.spreadsheets()
-gcal_client = calendar_service.events()
-
-
-def create_or_update_gcal_event(flight_info: FlightInfo, event_id: str | None):
-    event_description = (
-        f"✈️ {flight_info.departure_airport} → {flight_info.arrival_airport} {flight_info.flight_number}"
-    )
-    start = flight_info.departure_time
-    end = flight_info.arrival_time
-    if end <= start:
-        end = start + flight_info.duration
-    event = {
-        "summary": event_description,
-        "start": {
-            "dateTime": start.isoformat(),
-            "timeZone": start.tzinfo.zone,
-        },
-        "end": {
-            "dateTime": end.isoformat(),
-            "timeZone": end.tzinfo.zone,
-        },
-        "description": flight_info.as_gcal_description(),
-    }
-
-    if event_id:
-        event = gcal_client.update(calendarId=CALENDAR_ID, eventId=event_id, body=event).execute()
-        logger.info(f'📅 Updated event: {event_description} with ID {event["id"]}')
-
-    else:
-        event = gcal_client.insert(calendarId=CALENDAR_ID, body=event).execute()
-        logger.info(f'📅 Created event: {event_description} with ID {event["id"]}')
-    return event["id"]
-
-
-def update_row_with_formulas(row_index: int, new_row: OrderedDict):
-    """Updates a row in Google Sheets, ensuring formulas are used for 'Date' and 'Weekday' columns."""
-    row_values = list(new_row.values())
-
-    # Add formulas for 'Date' and Weekday
-    date_formula = f"=DATE(A{row_index}, MONTH(B{row_index}&1), C{row_index})"
-    weekday_formula = f'=TEXT(E{row_index}, "DDD")'  # Abbreviated weekday name, e.g., "Fri"
-
-    # Replace 'Date' and 'Weekday' columns with formulas
-    date_column_index = list(new_row.keys()).index("Date")
-    weekday_column_index = list(new_row.keys()).index("Weekday")
-
-    row_values[date_column_index] = date_formula
-    row_values[weekday_column_index] = weekday_formula
-    row_index_range = f"raw!A{row_index}:ZZ{row_index}"
-
-    sheet.values().update(
-        spreadsheetId=SPREADSHEET_ID,
-        range=row_index_range,
-        valueInputOption="USER_ENTERED",
-        body={"values": [row_values]},
-    ).execute()
-
-    logger.info(
-        f"\033[92m✅ Row updated\033[0m | \033[94mRow:\033[0m {row_index_range} | \033[93mDate:\033[0m {new_row['Date']} | \033[96mFlight:\033[0m {new_row['Flight #']}"
-    )
 
 
 def main():
-    # Read data from Google Sheets
-    result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
-    rows = result.get("values", [])
+    rows = fetch_flights_google_doc()
     header = rows[0]
+    rows = rows[1:]
 
     for i, row in enumerate(rows):
-        if i == 0:  # skip header
-            continue
-
         row = [row[x] if x < len(row) else None for x in range(len(header))]
         row = OrderedDict(zip(header, row))
 
@@ -145,8 +73,11 @@ def main():
             ]
         )
         assert list(new_row.keys()) == header
-        update_row_with_formulas(i + 1, new_row)
+        sheet_row = i + 2  # row 1 = header, row 2 = first data row
+        update_row_with_formulas(sheet_row, new_row)
 
 
 if __name__ == "__main__":
+    logging.basicConfig()
+    logging.getLogger().setLevel(logging.DEBUG)
     main()

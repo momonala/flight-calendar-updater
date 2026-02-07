@@ -6,7 +6,7 @@ from joblib import Memory
 from openai import OpenAI
 
 from src.datamodels import FlightInfo
-from values import OPENAI_API_KEY
+from src.values import OPENAI_API_KEY
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
