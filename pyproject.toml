@@ -49,7 +49,7 @@ build-backend = "hatchling.build"
 packages = ["src"]
 
 [project.scripts]
-foo = "src.main:main"
+main = "src.main:main"
 config = "src.config:main"
 
 

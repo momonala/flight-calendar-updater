@@ -8,13 +8,20 @@ from src.calendar_client import create_or_update_gcal_event
 from src.extract_flight_ai import get_flight_info
 from src.sheets_client import fetch_flights_google_doc, update_row_with_formulas
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s", force=True)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def main():
     rows = fetch_flights_google_doc()
+    if not rows:
+        logger.debug("❌ Failed to fetch flights from Google Sheets.")
+        return
     header = rows[0]
     rows = rows[1:]
+
+    rows_for_processing = []
 
     for i, row in enumerate(rows):
         row = [row[x] if x < len(row) else None for x in range(len(header))]
@@ -30,7 +37,13 @@ def main():
         if event_start < datetime.now():
             logger.debug(f"❌ skipping: flight is in the past {event_date=} {flight_no=}")
             continue
+        rows_for_processing.append(row)
 
+    if not rows_for_processing:
+        logger.info(f"{len(rows)} rows in google sheet, but no new flights to process.")
+        return
+
+    for row in rows_for_processing:
         print("-" * 100)
         flight_info = get_flight_info(event_start, flight_no)
         if not flight_info:
@@ -78,6 +91,4 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig()
-    logging.getLogger().setLevel(logging.DEBUG)
     main()
