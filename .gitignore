@@ -92,3 +92,4 @@ static/*.html
 # Local development
 .local/
 .ipython/
+.cursor/
