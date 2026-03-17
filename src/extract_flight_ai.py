@@ -5,6 +5,7 @@ from datetime import datetime
 from joblib import Memory
 from openai import OpenAI
 
+from src.config import OPENAI_MODEL
 from src.datamodels import FlightInfo
 from src.values import OPENAI_API_KEY
 
@@ -118,7 +119,7 @@ def get_flight_data(
     client = OpenAI(api_key=OPENAI_API_KEY)
     user_prompt = {"flight_number": flight_number, "flight_date": flight_date}
     response = client.responses.create(
-        model="gpt-5.2",
+        model=OPENAI_MODEL,
         tools=[{"type": "web_search"}],
         input=[
             {"role": "system", "content": system_prompt},

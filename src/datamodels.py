@@ -6,7 +6,7 @@ import airportsdata
 import aniso8601
 import pycountry
 import pytz
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 airports = airportsdata.load("IATA")
 
@@ -128,3 +128,61 @@ class FlightInfo(BaseModel):
             f"\t{arr.flag} {self.arrival_airport}, {self.arrival_city} {arr.name}{arr_suffix}\n"
             f"\t🛬 {self.format_datetime_with_offset(self.arrival_time)}\n"
         )
+
+
+class GSheetRow(BaseModel):
+    """A single row from the Google Sheet, keyed by the sheet's column names."""
+
+    model_config = {"populate_by_name": True}  # accept populate be field name (off in Pydantic v2)
+
+    year: str | None = Field(default=None, alias="Year")
+    month: str | None = Field(default=None, alias="Month")
+    day: str | None = Field(default=None, alias="Day")
+    weekday: str | None = Field(default=None, alias="Weekday")
+    date: datetime | None = Field(default=None, alias="Date")
+    flight_number: str | None = Field(default=None, alias="Flight #")
+    departure_airport: str | None = Field(default=None, alias="Departure Airport")
+    arrival_airport: str | None = Field(default=None, alias="Arrival Airport")
+    departure_time: str | None = Field(default=None, alias="Departure Time")
+    arrival_time: str | None = Field(default=None, alias="Arrival Time")
+    duration: str | None = Field(default=None, alias="Duration")
+    origin: str | None = Field(default=None, alias="Origin")
+    destination: str | None = Field(default=None, alias="Destination")
+    flighty: str | None = Field(default=None, alias="Flighty")
+    gcal_event_id: str | None = Field(default=None, alias="gcal_event_id")
+    note: str | None = Field(default=None, alias="note")
+    duration_s: float | None = Field(default=None, alias="duration_s")
+    airline: str | None = Field(default=None, alias="airline")
+    aircraft: str | None = Field(default=None, alias="aircraft")
+    departure_country: str | None = Field(default=None, alias="departure_country")
+    arrival_country: str | None = Field(default=None, alias="arrival_country")
+    departure_terminal: str | None = Field(default=None, alias="departure_terminal")
+    arrival_terminal: str | None = Field(default=None, alias="arrival_terminal")
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def _parse_sheet_date(cls, v: object) -> datetime | None:
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v
+        s = str(v).strip()
+        if not s:
+            return None
+        # Expected sheet format: "Nov 30, 1996"
+        try:
+            return datetime.strptime(s, "%b %d, %Y")
+        except ValueError as exc:
+            raise ValueError(f"Unsupported date format: {s!r}") from exc
+
+    @classmethod
+    def from_sheet_row(cls, *, header: list[str], values: list[str | None]) -> "GSheetRow":
+        padded = [values[i] if i < len(values) else None for i in range(len(header))]
+        return cls.model_validate(dict(zip(header, padded, strict=True)))
+
+
+class GSheetIndexedRow(BaseModel):
+    """A Google Sheet row plus its 1-based row number (metadata, not a sheet column)."""
+
+    row_number: int
+    row: GSheetRow

@@ -38,8 +38,9 @@ dependencies = [
 ]
 
 [tool.config]
-# This project is primarily configured via secrets in src/values.py
-# No non-secret configuration needed currently
+# Secrets configured in src/values.py
+openai_model = "gpt-5.4"
+scheduler_trigger_time = "10:00"
 
 [build-system]
 requires = ["hatchling"]

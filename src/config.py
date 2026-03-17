@@ -10,6 +10,9 @@ with _config_file.open("rb") as f:
 _project_config = _config["project"]
 _tool_config = _config["tool"]["config"]
 
+OPENAI_MODEL = _tool_config["openai_model"]
+SCHEDULER_TRIGGER_TIME = _tool_config["scheduler_trigger_time"]
+
 
 # fmt: off
 def config_cli(
