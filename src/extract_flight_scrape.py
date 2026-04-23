@@ -14,12 +14,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from src.config import OPENAI_MODEL
+from src.config import OPENAI_API_KEY, OPENAI_MODEL
 from src.datamodels import FlightInfo
-from src.values import OPENAI_API_KEY
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 memory = Memory(location=".cache")
 
 _airports = airportsdata.load("IATA")

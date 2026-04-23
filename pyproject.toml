@@ -36,12 +36,15 @@ dependencies = [
     "isort>=7.0.0",
     "typer>=0.9.0",
     "asyncio>=4.0.0",
+    "python-dotenv>=1.2.2",
 ]
 
 [tool.config]
-# Secrets configured in src/values.py
+# Non-secret config; secrets (SPREADSHEET_ID, CALENDAR_ID, OPENAI_API_KEY) come from env vars
 openai_model = "gpt-5.4"
 scheduler_trigger_time = "10:00"
+range_name = "raw!A:ZZ"
+service_account_file = "google_application_credentials.json"
 
 [build-system]
 requires = ["hatchling"]

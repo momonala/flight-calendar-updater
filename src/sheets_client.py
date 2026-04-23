@@ -2,18 +2,25 @@ import logging
 
 from googleapiclient.discovery import build
 
+from src.config import RANGE_NAME, SPREADSHEET_ID, google_credentials
 from src.datamodels import GSheetRow
-from src.values import RANGE_NAME, SPREADSHEET_ID, credentials
 
 logger = logging.getLogger(__name__)
 
-_sheets_service = build("sheets", "v4", credentials=credentials, cache_discovery=False)
-_sheet = _sheets_service.spreadsheets()
+_sheet = None
+
+
+def _get_sheet():
+    global _sheet
+    if _sheet is None:
+        service = build("sheets", "v4", credentials=google_credentials, cache_discovery=False)
+        _sheet = service.spreadsheets()
+    return _sheet
 
 
 def fetch_flights_google_doc() -> list[list[str]]:
     try:
-        result = _sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
+        result = _get_sheet().values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
         rows = result.get("values", [])
         return rows
     except Exception as e:
@@ -36,7 +43,7 @@ def update_row_with_formulas(row_index: int, *, header: list[str], new_row: GShe
     row_values[weekday_column_index] = weekday_formula
     row_index_range = f"raw!A{row_index}:ZZ{row_index}"
 
-    _sheet.values().update(
+    _get_sheet().values().update(
         spreadsheetId=SPREADSHEET_ID,
         range=row_index_range,
         valueInputOption="USER_ENTERED",

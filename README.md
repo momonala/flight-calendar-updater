@@ -63,22 +63,14 @@ flowchart LR
    - Share your Google Sheet with the service account email
    - Share your Google Calendar with the service account email
 
-3. Configure `src/values.py`:
-   ```python
-   from google.oauth2 import service_account
-
-   SERVICE_ACCOUNT_FILE = "google_application_credentials.json"
-   SCOPES = [
-       "https://www.googleapis.com/auth/calendar",
-       "https://www.googleapis.com/auth/spreadsheets",
-   ]
-
-   SPREADSHEET_ID = "<your-spreadsheet-id>"  # REQUIRED: from sheet URL
-   RANGE_NAME = "raw!A:ZZ"                   # default: reads all columns
-   CALENDAR_ID = "<your-calendar-id>"        # REQUIRED: email or calendar ID
-   credentials = service_account.Credentials.from_service_account_file(
-       SERVICE_ACCOUNT_FILE, scopes=SCOPES
-   )
+3. Configure secrets via `.env` (copy from `.env.example`):
+   ```bash
+   cp .env.example .env
+   ```
+   ```env
+   OPENAI_API_KEY=sk-...
+   SPREADSHEET_ID=your-google-sheet-id   # from the sheet URL
+   CALENDAR_ID=your-calendar@gmail.com   # email or calendar ID
    ```
 
 ## Running
@@ -105,14 +97,16 @@ flight-calendar-updater/
 │   ├── calendar_client.py        # Google Calendar create/update logic
 │   ├── sheets_client.py          # Google Sheets read/write logic
 │   ├── scheduler.py              # Daily cron wrapper using schedule library
-│   └── values.py                 # Config: Google credentials, sheet/calendar IDs
+│   └── config.py                 # All config and secrets (pyproject.toml + env vars)
 ├── tests/
 │   ├── conftest.py               # Shared fixtures
 │   ├── test_datamodels.py        # FlightInfo and GSheetRow validation tests
 │   ├── test_scraper.py           # Scraper and LLM extraction tests
 │   └── test_main.py              # Pipeline orchestration tests
+├── .env                          # Secrets: OPENAI_API_KEY, SPREADSHEET_ID, CALENDAR_ID (not committed)
+├── .env.example                  # Template for required env vars
 ├── google_application_credentials.json  # Service account key (not committed)
-├── pyproject.toml                # Dependencies
+├── pyproject.toml                # Dependencies and non-secret config
 └── install/
     ├── install.sh                # Linux systemd setup script
     └── projects_flight-calendar-updater.service  # systemd unit file
@@ -163,6 +157,8 @@ cd install
 ```
 
 This installs uv (if not already installed), installs dependencies, and enables a systemd service that runs `scheduler.py` continuously.
+
+For CI, set `OPENAI_API_KEY`, `SPREADSHEET_ID`, and `CALENDAR_ID` as repository secrets and expose them as environment variables in the workflow — `config.py` picks them up the same way as the local `.env` file.
 
 ## External Dependencies
 

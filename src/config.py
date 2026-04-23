@@ -1,7 +1,11 @@
+import os
 import tomllib
 from pathlib import Path
 
 import typer
+from dotenv import load_dotenv
+
+load_dotenv()
 
 _config_file = Path(__file__).parent.parent / "pyproject.toml"
 with _config_file.open("rb") as f:
@@ -10,8 +14,26 @@ with _config_file.open("rb") as f:
 _project_config = _config["project"]
 _tool_config = _config["tool"]["config"]
 
+# From pyproject.toml
 OPENAI_MODEL = _tool_config["openai_model"]
 SCHEDULER_TRIGGER_TIME = _tool_config["scheduler_trigger_time"]
+RANGE_NAME = _tool_config["range_name"]
+SERVICE_ACCOUNT_FILE = _tool_config["service_account_file"]
+
+# From environment variables
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "")
+CALENDAR_ID = os.environ.get("CALENDAR_ID", "")
+
+# Google credentials — built only when the service account file is present (skipped in CI)
+_creds_path = Path(SERVICE_ACCOUNT_FILE)
+if _creds_path.exists():
+    from google.oauth2 import service_account as _sa
+
+    _SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/spreadsheets"]
+    google_credentials = _sa.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=_SCOPES)
+else:
+    google_credentials = None
 
 
 # fmt: off

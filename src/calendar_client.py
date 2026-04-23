@@ -2,13 +2,20 @@ import logging
 
 from googleapiclient.discovery import build
 
+from src.config import CALENDAR_ID, google_credentials
 from src.datamodels import FlightInfo
-from src.values import CALENDAR_ID, credentials
 
 logger = logging.getLogger(__name__)
 
-_calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
-_gcal_client = _calendar_service.events()
+_gcal_client = None
+
+
+def _get_gcal_client():
+    global _gcal_client
+    if _gcal_client is None:
+        service = build("calendar", "v3", credentials=google_credentials, cache_discovery=False)
+        _gcal_client = service.events()
+    return _gcal_client
 
 
 def create_or_update_gcal_event(flight_info: FlightInfo, event_id: str | None) -> str:
@@ -33,9 +40,9 @@ def create_or_update_gcal_event(flight_info: FlightInfo, event_id: str | None) -
     }
 
     if event_id:
-        event = _gcal_client.update(calendarId=CALENDAR_ID, eventId=event_id, body=event).execute()
+        event = _get_gcal_client().update(calendarId=CALENDAR_ID, eventId=event_id, body=event).execute()
         logger.info(f'📅 Updated event: {event_description} with ID {event["id"]}')
     else:
-        event = _gcal_client.insert(calendarId=CALENDAR_ID, body=event).execute()
+        event = _get_gcal_client().insert(calendarId=CALENDAR_ID, body=event).execute()
         logger.info(f'📅 Created event: {event_description} with ID {event["id"]}')
     return event["id"]
