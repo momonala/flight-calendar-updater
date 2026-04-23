@@ -3,11 +3,11 @@
 [![CI](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml/badge.svg)](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/momonala/flight-calendar-updater/branch/main/graph/badge.svg)](https://codecov.io/gh/momonala/flight-calendar-updater)
 
-Syncs flight details from a Google Sheet to Google Calendar by scraping flight data from aviability.com.
+Syncs flight details from a Google Sheet to Google Calendar. Scrapes live schedule data from aviability.com using Selenium, then uses a lean OpenAI call to extract structured fields from the scraped text — no hallucination, no training-data recall.
 
 ## Tech Stack
 
-Python 3.12, Google APIs (Sheets v4, Calendar v3), BeautifulSoup4, Poetry
+Python 3.12, Google APIs (Sheets v4, Calendar v3), Selenium, OpenAI, uv
 
 ## Architecture
 
@@ -15,19 +15,22 @@ Python 3.12, Google APIs (Sheets v4, Calendar v3), BeautifulSoup4, Poetry
 flowchart LR
     subgraph External
         AV[aviability.com]
+        OAI[OpenAI API]
         GS[Google Sheets]
         GC[Google Calendar]
     end
     subgraph App
         M[src/main.py]
-        EF[src/extract_flight.py]
+        EF[src/extract_flight_scrape.py]
         SCH[src/scheduler.py]
     end
     
     GS -->|read flight #, date| M
     M --> EF
-    EF -->|scrape| AV
-    AV -->|flight details| EF
+    EF -->|Selenium POST| AV
+    AV -->|scraped text signals| EF
+    EF -->|structured extraction| OAI
+    OAI -->|airports, airline, aircraft, terminal| EF
     EF --> M
     M -->|create/update events| GC
     M -->|update row| GS
@@ -82,10 +85,13 @@ flowchart LR
 
 ```bash
 # One-time run
-python -m src.main
+uv run main
+
+# Force re-fetch (clears joblib cache, ignores cached scrape results)
+uv run main --update
 
 # As daemon (runs daily at midnight)
-python -m src.scheduler
+uv run python -m src.scheduler
 ```
 
 ## Project Structure
@@ -93,14 +99,22 @@ python -m src.scheduler
 ```
 flight-calendar-updater/
 ├── src/
-│   ├── main.py             # Entry point: orchestrates sheet read → scrape → calendar update
-│   ├── extract_flight.py   # Flight scraping & parsing from aviability.com
-│   ├── scheduler.py        # Daily cron wrapper using schedule library
-│   └── values.py           # Config: Google credentials, sheet/calendar IDs
+│   ├── main.py                   # Entry point: orchestrates sheet read → scrape → calendar update
+│   ├── extract_flight_scrape.py  # Selenium scraper + OpenAI field extraction
+│   ├── datamodels.py             # Pydantic models: FlightInfo, GSheetRow
+│   ├── calendar_client.py        # Google Calendar create/update logic
+│   ├── sheets_client.py          # Google Sheets read/write logic
+│   ├── scheduler.py              # Daily cron wrapper using schedule library
+│   └── values.py                 # Config: Google credentials, sheet/calendar IDs
+├── tests/
+│   ├── conftest.py               # Shared fixtures
+│   ├── test_datamodels.py        # FlightInfo and GSheetRow validation tests
+│   ├── test_scraper.py           # Scraper and LLM extraction tests
+│   └── test_main.py              # Pipeline orchestration tests
 ├── google_application_credentials.json  # Service account key (not committed)
-├── pyproject.toml          # Dependencies
+├── pyproject.toml                # Dependencies
 └── install/
-    ├── install.sh          # Linux systemd setup script
+    ├── install.sh                # Linux systemd setup script
     └── projects_flight-calendar-updater.service  # systemd unit file
 ```
 
@@ -108,18 +122,21 @@ flight-calendar-updater/
 
 | Concept | Description |
 |---------|-------------|
-| `FlightInfo` | Dataclass holding parsed flight data (times, airports, terminals, aircraft) |
+| `FlightInfo` | Pydantic model holding parsed flight data (times, airports, terminals, aircraft) |
 | `gcal_event_id` | Sheet column storing Calendar event ID for update vs. create logic |
-| Timezone handling | Times are localized using airport IATA codes → `airportsdata` timezone lookup |
+| Timezone handling | UTC times from aviability.com converted to local via `airportsdata` + `pytz` |
+| Grounded LLM extraction | OpenAI parses scraped text only — no web_search tool, no hallucination |
+| Joblib cache | `get_flight_data` results cached to `.cache/`; cleared with `--update` flag |
 | Date formulas | Sheet columns `Date` and `Weekday` use Excel formulas, not raw values |
 
 ## Data Flow
 
 1. **Read** — Fetch rows from Google Sheet where `Date` is in the future and `Flight #` exists
-2. **Scrape** — POST to `aviability.com/en/flight/` with flight number → parse HTML response
-3. **Transform** — Extract airports, times, terminals, aircraft into `FlightInfo`
-4. **Calendar** — Create new event or update existing (using `gcal_event_id`)
-5. **Write back** — Update sheet row with enriched flight details
+2. **Scrape** — Selenium POSTs to `aviability.com/en/flight` with flight number and date; extracts UTC times and text signals
+3. **Extract** — OpenAI parses scraped text to structured fields (airports, airline, aircraft, terminal, country codes)
+4. **Transform** — UTC times converted to local using `airportsdata`; duration computed as Python `timedelta`
+5. **Calendar** — Create new event or update existing (using `gcal_event_id`)
+6. **Write back** — Update sheet row with enriched flight details
 
 ## Google Sheet Schema
 
@@ -151,12 +168,7 @@ This installs uv (if not already installed), installs dependencies, and enables 
 
 | Service | Usage | Notes |
 |---------|-------|-------|
-| aviability.com | Flight data scraping | Unofficial, no API key needed |
+| aviability.com | Flight schedule scraping | Unofficial, no API key needed; Selenium required to bypass Cloudflare |
+| OpenAI API | Structured field extraction from scraped text | Requires `OPENAI_API_KEY` env var |
 | Google Sheets API | Read/write flight tracker | Requires service account |
 | Google Calendar API | Create/update events | Requires service account |
-
-## Limitations
-
-- Scrapes aviability.com — may break if site structure changes
-- Flight lookup requires exact flight number format
-- Only processes future flights (past dates are skipped)
