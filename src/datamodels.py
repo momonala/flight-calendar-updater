@@ -19,17 +19,6 @@ def _localize_datetime(iso_str: str, airport_iata: str) -> datetime:
     return tz.localize(dt)
 
 
-class DataSource(BaseModel):
-    source: str
-    used_for: str
-
-
-class DataQuality(BaseModel):
-    status: str = "scheduled"
-    confidence: str = "medium"
-    notes: str = ""
-
-
 class FlightInfo(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
@@ -50,8 +39,6 @@ class FlightInfo(BaseModel):
     duration: timedelta
     aircraft: str | None = None
     route_distance_km: float | None = None
-    data_sources: list[DataSource] = []
-    data_quality: DataQuality = DataQuality()
 
     @field_validator("departure_country", "arrival_country", mode="before")
     @classmethod

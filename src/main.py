@@ -1,9 +1,11 @@
 import logging
 from datetime import datetime
 
+import typer
+
 from src.calendar_client import create_or_update_gcal_event
 from src.datamodels import GSheetIndexedRow, GSheetRow
-from src.extract_flight_ai import get_flight_info
+from src.extract_flight_scrape import get_flight_info, memory
 from src.sheets_client import fetch_flights_google_doc, update_row_with_formulas
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s", force=True)
@@ -34,76 +36,101 @@ def _has_gcal_event_id(gcal_event_id: str | None) -> bool:
     return False
 
 
+def _is_in_the_past(event_start: datetime) -> bool:
+    if event_start < datetime.now():
+        logger.debug(f"❌ skipping: in the past ({event_start} < {datetime.now()})")
+        return True
+    return False
+
+
 def _should_skip_row(row: GSheetRow) -> bool:
     if not _has_required_fields(row.date, row.flight_number):
         return True
     if _is_before_or_on_cutoff(row.date):
         return True
-    if _has_gcal_event_id(row.gcal_event_id):
+    # if _has_gcal_event_id(row.gcal_event_id):
+    # return True
+    if _is_in_the_past(row.date):
         return True
     return False
 
 
-def main():
+def _get_rows_for_processing(rows: list) -> list[GSheetIndexedRow]:
+    header, data_rows = rows[0], rows[1:]
+    result = []
+    for i, row in enumerate(data_rows):
+        sheet_row = GSheetRow.from_sheet_row(header=header, values=row)
+        if not _should_skip_row(sheet_row):
+            result.append(GSheetIndexedRow(row_number=i + 2, row=sheet_row))
+    return result
+
+
+def _build_updated_row(row: GSheetRow, flight_info, event_id: str) -> GSheetRow:
+    return GSheetRow(
+        year=row.year,
+        month=row.month,
+        day=row.day,
+        weekday="Fri",
+        date=flight_info.departure_time,
+        flight_number=row.flight_number,
+        departure_airport=flight_info.departure_airport,
+        arrival_airport=flight_info.arrival_airport,
+        departure_time=flight_info.format_time_with_offset(flight_info.departure_time),
+        arrival_time=flight_info.format_time_with_offset(flight_info.arrival_time),
+        duration=flight_info.formatted_duration,
+        origin=flight_info.departure_city,
+        destination=flight_info.arrival_city,
+        flighty=row.flighty,
+        gcal_event_id=event_id,
+        note=row.note,
+        duration_s=flight_info.duration.total_seconds(),
+        airline=flight_info.airline,
+        aircraft=flight_info.aircraft,
+        departure_country=flight_info.departure_country.name,
+        arrival_country=flight_info.arrival_country.name,
+        departure_terminal=flight_info.departure_terminal,
+        arrival_terminal=flight_info.arrival_terminal,
+    )
+
+
+def _process_flight(indexed_row: GSheetIndexedRow, header: list) -> None:
+    row = indexed_row.row
+    flight_info = get_flight_info(row.date, row.flight_number)
+    if not flight_info:
+        logger.error("❌ failed to get flight for: Date=%r Flight #=%r", row.date, row.flight_number)
+        return
+    event_id = create_or_update_gcal_event(flight_info, row.gcal_event_id)
+    new_row = _build_updated_row(row, flight_info, event_id)
+    update_row_with_formulas(indexed_row.row_number, header=header, new_row=new_row)
+
+
+app = typer.Typer()
+
+
+@app.command()
+def main(
+    update: bool = typer.Option(False, "--update", help="Clear the scrape cache and re-fetch fresh data")
+):
+    if update:
+        logger.info("--update flag set: clearing scrape cache")
+        memory.clear()
+
     rows = fetch_flights_google_doc()
     if not rows:
-        logger.debug("❌ Failed to fetch flights from Google Sheets.")
+        logger.warning("❌ Failed to fetch flights from Google Sheets.")
         return
-    header = rows[0]
-    rows = rows[1:]
 
-    rows_for_processing: list[GSheetIndexedRow] = []
-
-    for i, row in enumerate(rows):
-        sheet_row = GSheetRow.from_sheet_row(header=header, values=row)
-
-        if _should_skip_row(sheet_row):
-            continue
-
-        sheet_row_number = i + 2  # row 1 = header, row 2 = first data row
-        rows_for_processing.append(GSheetIndexedRow(row_number=sheet_row_number, row=sheet_row))
-
+    rows_for_processing = _get_rows_for_processing(rows)
     if not rows_for_processing:
-        logger.info("%d rows in google sheet, but no new flights to process.", len(rows))
+        logger.info("%d rows in google sheet, but no new flights to process.", len(rows) - 1)
         return
 
-    logger.info(f"Processing {len(rows_for_processing)} flights")
+    header = rows[0]
+    logger.info("Processing %d flights", len(rows_for_processing))
     for indexed_row in rows_for_processing:
         print("-" * 100)
-        row = indexed_row.row
-        flight_info = get_flight_info(row.date, row.flight_number)
-        if not flight_info:
-            logger.error(f"❌ failed to get flight for: Date={row.date!r} Flight #={row.flight_number!r}")
-            continue
-
-        event_id = create_or_update_gcal_event(flight_info, row.gcal_event_id)
-        new_row = GSheetRow(
-            year=row.year,
-            month=row.month,
-            day=row.day,
-            weekday="Fri",
-            date=flight_info.departure_time,
-            flight_number=row.flight_number,
-            departure_airport=flight_info.departure_airport,
-            arrival_airport=flight_info.arrival_airport,
-            departure_time=flight_info.format_time_with_offset(flight_info.departure_time),
-            arrival_time=flight_info.format_time_with_offset(flight_info.arrival_time),
-            duration=flight_info.formatted_duration,
-            origin=flight_info.departure_city,
-            destination=flight_info.arrival_city,
-            flighty=row.flighty,
-            gcal_event_id=event_id,
-            note=row.note,
-            duration_s=flight_info.duration.total_seconds(),
-            airline=flight_info.airline,
-            aircraft=flight_info.aircraft,
-            departure_country=flight_info.departure_country.name,
-            arrival_country=flight_info.arrival_country.name,
-            departure_terminal=flight_info.departure_terminal,
-            arrival_terminal=flight_info.arrival_terminal,
-        )
-        update_row_with_formulas(indexed_row.row_number, header=header, new_row=new_row)
+        _process_flight(indexed_row, header)
 
 
 if __name__ == "__main__":
-    main()
+    app()
