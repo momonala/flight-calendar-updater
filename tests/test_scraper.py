@@ -34,12 +34,7 @@ class TestUtcToLocal:
 
 # ── get_flight_data ──────────────────────────────────────────────────────────
 
-_FAKE_SIGNALS = {
-    "meta_description": "Flight U2 2933, Status Planned, Departure Bristol Jun 23 14:55, Arrival Berlin Jun 23 17:50",
-    "main_text": "U2 2933 easyJet from Bristol to Berlin on 23 June 2026",
-    "dep_utc_iso": "2026-06-23T13:55Z",  # 14:55 BST
-    "arr_utc_iso": "2026-06-23T15:50Z",  # 17:50 CEST
-}
+_FAKE_HTML = "<main>fake flight detail page</main>"
 
 _FAKE_LLM = {
     "departure_airport": "BRS",
@@ -51,12 +46,14 @@ _FAKE_LLM = {
     "airline": "easyJet",
     "aircraft": "Airbus A320",
     "arrival_terminal": "1",
+    "dep_utc_iso": "2026-06-23T13:55Z",  # 14:55 BST
+    "arr_utc_iso": "2026-06-23T15:50Z",  # 17:50 CEST
 }
 
 
 def test_get_flight_data_assembles_correct_dict(monkeypatch):
-    monkeypatch.setattr(scraper, "_scrape_signals", lambda fn, dt: _FAKE_SIGNALS)
-    monkeypatch.setattr(scraper, "_extract_with_llm", lambda signals: _FAKE_LLM)
+    monkeypatch.setattr(scraper, "_scrape_main_html", lambda fn, dt: _FAKE_HTML)
+    monkeypatch.setattr(scraper, "_extract_with_llm", lambda html: _FAKE_LLM)
 
     result = get_flight_data("U2 2933", "2026-06-23")
 
@@ -71,8 +68,8 @@ def test_get_flight_data_assembles_correct_dict(monkeypatch):
 
 
 def test_get_flight_data_computes_duration_from_utc_times(monkeypatch):
-    monkeypatch.setattr(scraper, "_scrape_signals", lambda fn, dt: _FAKE_SIGNALS)
-    monkeypatch.setattr(scraper, "_extract_with_llm", lambda signals: _FAKE_LLM)
+    monkeypatch.setattr(scraper, "_scrape_main_html", lambda fn, dt: _FAKE_HTML)
+    monkeypatch.setattr(scraper, "_extract_with_llm", lambda html: _FAKE_LLM)
 
     result = get_flight_data("U2 2933", "2026-06-23")
 
@@ -81,8 +78,8 @@ def test_get_flight_data_computes_duration_from_utc_times(monkeypatch):
 
 
 def test_get_flight_data_localizes_departure_to_airport_timezone(monkeypatch):
-    monkeypatch.setattr(scraper, "_scrape_signals", lambda fn, dt: _FAKE_SIGNALS)
-    monkeypatch.setattr(scraper, "_extract_with_llm", lambda signals: _FAKE_LLM)
+    monkeypatch.setattr(scraper, "_scrape_main_html", lambda fn, dt: _FAKE_HTML)
+    monkeypatch.setattr(scraper, "_extract_with_llm", lambda html: _FAKE_LLM)
 
     result = get_flight_data("U2 2933", "2026-06-23")
 
@@ -98,8 +95,8 @@ def test_get_flight_info_returns_flight_info_on_success(monkeypatch):
 
     from src.datamodels import FlightInfo
 
-    monkeypatch.setattr(scraper, "_scrape_signals", lambda fn, dt: _FAKE_SIGNALS)
-    monkeypatch.setattr(scraper, "_extract_with_llm", lambda signals: _FAKE_LLM)
+    monkeypatch.setattr(scraper, "_scrape_main_html", lambda fn, dt: _FAKE_HTML)
+    monkeypatch.setattr(scraper, "_extract_with_llm", lambda html: _FAKE_LLM)
 
     result = get_flight_info(datetime(2026, 6, 23), "U2 2933")
 
@@ -112,7 +109,7 @@ def test_get_flight_info_returns_none_on_scrape_failure(monkeypatch):
     from datetime import datetime
 
     monkeypatch.setattr(
-        scraper, "_scrape_signals", lambda fn, dt: (_ for _ in ()).throw(ValueError("Cloudflare blocked"))
+        scraper, "_scrape_main_html", lambda fn, dt: (_ for _ in ()).throw(ValueError("scrape failed"))
     )
 
     result = get_flight_info(datetime(2026, 6, 23), "U2 9999")
