@@ -9,11 +9,7 @@ import airportsdata
 import pytz
 from joblib import Memory
 from openai import OpenAI
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from playwright.sync_api import Page, sync_playwright
 
 from src.config import OPENAI_API_KEY, OPENAI_MODEL
 from src.datamodels import FlightInfo
@@ -53,62 +49,40 @@ Rules:
   the first such element is departure, the second is arrival"""
 
 
-def _make_driver() -> webdriver.Chrome:
-    opts = Options()
-    # opts.add_argument("--headless")
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-    opts.add_argument("--disable-blink-features=AutomationControlled")
-    opts.add_argument(
-        "user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    )
-    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
-    opts.add_experimental_option("useAutomationExtension", False)
-
-    driver = webdriver.Chrome(options=opts)
-    # Block Google Funding Choices at network level so the consent wall never loads
-    driver.execute_cdp_cmd("Network.enable", {})
-    driver.execute_cdp_cmd("Network.setBlockedURLs", {"urls": ["*fundingchoicesmessages.google.com*"]})
-    return driver
-
-
-def _dump_html(driver: webdriver.Chrome, label: str) -> None:
+def _dump_html(page: Page, label: str) -> None:
     os.makedirs(".cache", exist_ok=True)
     path = f".cache/debug_{label.replace(' ', '_').replace('/', '-')}.html"
     with open(path, "w", encoding="utf-8") as f:
-        f.write(driver.page_source)
-    logger.debug("[HTML dump] %s → %s  (url=%s)", label, path, driver.current_url)
+        f.write(page.content())
+    logger.debug("[HTML dump] %s → %s  (url=%s)", label, path, page.url)
 
 
-def _post_form(driver: webdriver.Chrome, action: str, field_name: str, field_value: str) -> None:
-    driver.execute_script(
-        """
-        var f = document.createElement('form');
-        f.method = 'POST'; f.action = arguments[0];
-        var i = document.createElement('input');
-        i.type = 'hidden'; i.name = arguments[1]; i.value = arguments[2];
-        f.appendChild(i); document.body.appendChild(f); f.submit();
-        """,
-        action,
-        field_name,
-        field_value,
+def _post_form(page: Page, action: str, field_name: str, field_value: str) -> None:
+    page.evaluate(
+        """([action, name, value]) => {
+            var f = document.createElement('form');
+            f.method = 'POST'; f.action = action;
+            var i = document.createElement('input');
+            i.type = 'hidden'; i.name = name; i.value = value;
+            f.appendChild(i); document.body.appendChild(f); f.submit();
+        }""",
+        [action, field_name, field_value],
     )
 
 
-def _wait_for(driver: webdriver.Chrome, css: str, label: str, timeout: int = 20) -> None:
+def _wait_for(page: Page, css: str, label: str, timeout: int = 20) -> None:
     try:
-        WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, css)))
-        logger.debug("Page ready [%s]: %s", label, driver.current_url)
+        page.wait_for_selector(css, state="attached", timeout=timeout * 1000)
+        logger.debug("Page ready [%s]: %s", label, page.url)
     except Exception as e:
-        _dump_html(driver, f"{label}_timeout")
+        _dump_html(page, f"{label}_timeout")
         raise RuntimeError(f"Timed out waiting for {label} ({css!r}): {e}") from e
 
 
-def _find_route_path(driver: webdriver.Chrome) -> str:
-    for el in driver.find_elements(By.CSS_SELECTOR, 'script[type="application/json"]'):
+def _find_route_path(page: Page) -> str:
+    for el in page.query_selector_all('script[type="application/json"]'):
         try:
-            parsed = json.loads(el.get_attribute("innerHTML"))
+            parsed = json.loads(el.inner_html())
         except json.JSONDecodeError:
             continue
         routes = parsed.get("r")
@@ -121,26 +95,30 @@ def _find_route_path(driver: webdriver.Chrome) -> str:
 
 def _scrape_main_html(flight_number: str, flight_date: str) -> str:
     """Navigate aviability.com to the flight detail page and return the <main> HTML."""
-    driver = _make_driver()
-    try:
-        logger.debug("Navigating to aviability.com for %s", flight_number)
-        driver.get("https://aviability.com/en/flight")
-        _post_form(driver, "https://aviability.com/en/flight", "fn", flight_number)
-        _wait_for(driver, 'script[type="application/json"]', "overview")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        page = browser.new_page()
+        page.route("**/*fundingchoicesmessages.google.com*/**", lambda route: route.abort())
+        try:
+            logger.debug("Navigating to aviability.com for %s", flight_number)
+            page.goto("https://aviability.com/en/flight")
+            _post_form(page, "https://aviability.com/en/flight", "fn", flight_number)
+            _wait_for(page, 'script[type="application/json"]', "overview")
 
-        route_path = _find_route_path(driver)
-        detail_url = "https://aviability.com" + route_path
+            route_path = _find_route_path(page)
+            detail_url = "https://aviability.com" + route_path
 
-        logger.debug("Posting date %s to %s", flight_date, detail_url)
-        _post_form(driver, detail_url, "date", flight_date)
-        _wait_for(driver, f'time[datetime^="{flight_date}T"]', "detail")
+            logger.debug("Posting date %s to %s", flight_date, detail_url)
+            _post_form(page, detail_url, "date", flight_date)
+            _wait_for(page, f'time[datetime^="{flight_date}T"]', "detail")
 
-        _dump_html(driver, "03_detail")
-        main_html = driver.find_element(By.TAG_NAME, "main").get_attribute("outerHTML")
-        logger.debug("main HTML length: %d chars", len(main_html))
-        return main_html
-    finally:
-        driver.quit()
+            _dump_html(page, "03_detail")
+            main_el = page.query_selector("main")
+            main_html = main_el.inner_html()
+            logger.debug("main HTML length: %d chars", len(main_html))
+            return main_html
+        finally:
+            browser.close()
 
 
 def _utc_to_local(utc_iso: str, airport_iata: str) -> datetime:

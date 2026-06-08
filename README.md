@@ -3,39 +3,7 @@
 [![CI](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml/badge.svg)](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/momonala/flight-calendar-updater/branch/main/graph/badge.svg)](https://codecov.io/gh/momonala/flight-calendar-updater)
 
-Syncs flight details from a Google Sheet to Google Calendar. Scrapes live schedule data from aviability.com using Selenium, then uses a lean OpenAI call to extract structured fields from the scraped text — no hallucination, no training-data recall.
-
-## Tech Stack
-
-Python 3.12, Google APIs (Sheets v4, Calendar v3), Selenium, OpenAI, uv
-
-## Architecture
-
-```mermaid
-flowchart LR
-    subgraph External
-        AV[aviability.com]
-        OAI[OpenAI API]
-        GS[Google Sheets]
-        GC[Google Calendar]
-    end
-    subgraph App
-        M[src/main.py]
-        EF[src/extract_flight_scrape.py]
-        SCH[src/scheduler.py]
-    end
-    
-    GS -->|read flight #, date| M
-    M --> EF
-    EF -->|Selenium POST| AV
-    AV -->|scraped text signals| EF
-    EF -->|structured extraction| OAI
-    OAI -->|airports, airline, aircraft, terminal| EF
-    EF --> M
-    M -->|create/update events| GC
-    M -->|update row| GS
-    SCH -->|daily 00:00| M
-```
+Syncs flight details from a Google Sheet to Google Calendar. Scrapes live schedule data from aviability.com using Playwright, then uses a lean OpenAI call to extract structured fields from the scraped text — no hallucination, no training-data recall.
 
 ## Prerequisites
 
@@ -54,6 +22,7 @@ flowchart LR
    cd flight-calendar-updater
    curl -LsSf https://astral.sh/uv/install.sh | sh
    uv sync
+   uv run playwright install chromium
    ```
 
 2. Set up Google credentials:
@@ -82,7 +51,7 @@ uv run main
 # Force re-fetch (clears joblib cache, ignores cached scrape results)
 uv run main --update
 
-# As daemon (runs daily at midnight)
+# As daemon (runs daily at scheduler_trigger_time in pyproject.toml, default 10:00)
 uv run python -m src.scheduler
 ```
 
@@ -112,6 +81,34 @@ flight-calendar-updater/
     └── projects_flight-calendar-updater.service  # systemd unit file
 ```
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph External
+        AV[aviability.com]
+        OAI[OpenAI API]
+        GS[Google Sheets]
+        GC[Google Calendar]
+    end
+    subgraph App
+        M[src/main.py]
+        EF[src/extract_flight_scrape.py]
+        SCH[src/scheduler.py]
+    end
+    
+    GS -->|read flight #, date| M
+    M --> EF
+    EF -->|Selenium POST| AV
+    AV -->|scraped text signals| EF
+    EF -->|structured extraction| OAI
+    OAI -->|airports, airline, aircraft, terminal| EF
+    EF --> M
+    M -->|create/update events| GC
+    M -->|update row| GS
+    SCH -->|daily @ scheduler_trigger_time| M
+```
+
 ## Key Concepts
 
 | Concept | Description |
@@ -122,15 +119,6 @@ flight-calendar-updater/
 | Grounded LLM extraction | OpenAI parses scraped text only — no web_search tool, no hallucination |
 | Joblib cache | `get_flight_data` results cached to `.cache/`; cleared with `--update` flag |
 | Date formulas | Sheet columns `Date` and `Weekday` use Excel formulas, not raw values |
-
-## Data Flow
-
-1. **Read** — Fetch rows from Google Sheet where `Date` is in the future and `Flight #` exists
-2. **Scrape** — Selenium POSTs to `aviability.com/en/flight` with flight number and date; extracts UTC times and text signals
-3. **Extract** — OpenAI parses scraped text to structured fields (airports, airline, aircraft, terminal, country codes)
-4. **Transform** — UTC times converted to local using `airportsdata`; duration computed as Python `timedelta`
-5. **Calendar** — Create new event or update existing (using `gcal_event_id`)
-6. **Write back** — Update sheet row with enriched flight details
 
 ## Google Sheet Schema
 
@@ -149,22 +137,11 @@ flight-calendar-updater/
 | `departure_terminal`, `arrival_terminal` | string | From scrape |
 | `departure_country`, `arrival_country` | string | Country names |
 
-## Deployment (Linux systemd)
-
-```bash
-cd install
-./install.sh
-```
-
-This installs uv (if not already installed), installs dependencies, and enables a systemd service that runs `scheduler.py` continuously.
-
-For CI, set `OPENAI_API_KEY`, `SPREADSHEET_ID`, and `CALENDAR_ID` as repository secrets and expose them as environment variables in the workflow — `config.py` picks them up the same way as the local `.env` file.
-
 ## External Dependencies
 
 | Service | Usage | Notes |
 |---------|-------|-------|
-| aviability.com | Flight schedule scraping | Unofficial, no API key needed; Selenium required to bypass Cloudflare |
+| aviability.com | Flight schedule scraping | Unofficial, no API key needed; requires `uv run playwright install chromium` |
 | OpenAI API | Structured field extraction from scraped text | Requires `OPENAI_API_KEY` env var |
 | Google Sheets API | Read/write flight tracker | Requires service account |
 | Google Calendar API | Create/update events | Requires service account |
