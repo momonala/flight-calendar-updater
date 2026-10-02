@@ -3,7 +3,7 @@
 [![CI](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml/badge.svg)](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/momonala/flight-calendar-updater/branch/main/graph/badge.svg)](https://codecov.io/gh/momonala/flight-calendar-updater)
 
-Syncs flight details from a Google Sheet to Google Calendar. Scrapes live schedule data from aviability.com using Playwright, then uses a lean OpenAI call to extract structured fields from the scraped text — no hallucination, no training-data recall.
+Syncs flight details from a Google Sheet to Google Calendar. Looks up schedules on Flighty's private protobuf API (reverse-engineered from the iOS app). The older aviability.com scraper and OpenAI extractor are kept in `src/extract_flight_scrape.py` and `src/extract_flight_ai.py` as alternative fetchers with the same `get_flight_info` contract.
 
 ## Prerequisites
 
@@ -22,7 +22,7 @@ Syncs flight details from a Google Sheet to Google Calendar. Scrapes live schedu
    cd flight-calendar-updater
    curl -LsSf https://astral.sh/uv/install.sh | sh
    uv sync
-   uv run playwright install chromium
+   uv run playwright install chromium   # only if you switch back to the scraper
    ```
 
 2. Set up Google credentials:
@@ -37,10 +37,17 @@ Syncs flight details from a Google Sheet to Google Calendar. Scrapes live schedu
    cp .env.example .env
    ```
    ```env
-   OPENAI_API_KEY=sk-...
    SPREADSHEET_ID=your-google-sheet-id   # from the sheet URL
    CALENDAR_ID=your-calendar@gmail.com   # email or calendar ID
+   FLIGHTY_AUTH_TOKEN=eyJ...             # see below
+   FLIGHTY_BUILD_TOKEN=eyJ...
+   OPENAI_API_KEY=sk-...                 # only for the scraper/AI fetchers
    ```
+
+4. Get the Flighty tokens. Capture the app's traffic (e.g. mitmproxy on the phone) and copy two
+   request headers: `authorization: Bearer ...` is `FLIGHTY_AUTH_TOKEN` (anonymous account, does
+   not expire); `x-flighty-build-token` is `FLIGHTY_BUILD_TOKEN` (baked into the app build).
+   Flighty's search endpoint has a daily quota; once it returns 429 the limit resets the next day.
 
 ## Running
 
@@ -48,7 +55,7 @@ Syncs flight details from a Google Sheet to Google Calendar. Scrapes live schedu
 # One-time run
 uv run main
 
-# Force re-fetch (clears joblib cache, ignores cached scrape results)
+# Clear the cached Flighty airline table (otherwise kept for 7 days)
 uv run main --update
 
 # As daemon (runs daily at scheduler_trigger_time in pyproject.toml, default 10:00)
@@ -60,8 +67,9 @@ uv run python -m src.scheduler
 ```
 flight-calendar-updater/
 ├── src/
-│   ├── main.py                   # Entry point: orchestrates sheet read → scrape → calendar update
-│   ├── extract_flight_scrape.py  # Selenium scraper + OpenAI field extraction
+│   ├── main.py                   # Entry point: orchestrates sheet read → Flighty lookup → calendar update
+│   ├── flighty_client.py         # Flighty private API client (protobuf wire codec, airline table, search)
+│   ├── extract_flight_scrape.py  # Alternative fetcher: Playwright scraper + OpenAI field extraction
 │   ├── datamodels.py             # Pydantic models: FlightInfo, GSheetRow
 │   ├── calendar_client.py        # Google Calendar create/update logic
 │   ├── sheets_client.py          # Google Sheets read/write logic
@@ -86,24 +94,22 @@ flight-calendar-updater/
 ```mermaid
 flowchart LR
     subgraph External
-        AV[aviability.com]
-        OAI[OpenAI API]
+        FL[api.flightyapp.com]
         GS[Google Sheets]
         GC[Google Calendar]
     end
     subgraph App
         M[src/main.py]
-        EF[src/extract_flight_scrape.py]
+        FC[src/flighty_client.py]
         SCH[src/scheduler.py]
     end
-    
+
     GS -->|read flight #, date| M
-    M --> EF
-    EF -->|Selenium POST| AV
-    AV -->|scraped text signals| EF
-    EF -->|structured extraction| OAI
-    OAI -->|airports, airline, aircraft, terminal| EF
-    EF --> M
+    M --> FC
+    FC -->|/v1/sync/full, cached 7d| FL
+    FC -->|/v1/search protobuf| FL
+    FL -->|airports, times, airline, aircraft, terminal| FC
+    FC --> M
     M -->|create/update events| GC
     M -->|update row| GS
     SCH -->|daily @ scheduler_trigger_time| M
@@ -115,9 +121,9 @@ flowchart LR
 |---------|-------------|
 | `FlightInfo` | Pydantic model holding parsed flight data (times, airports, terminals, aircraft) |
 | `gcal_event_id` | Sheet column storing Calendar event ID for update vs. create logic |
-| Timezone handling | UTC times from aviability.com converted to local via `airportsdata` + `pytz` |
-| Grounded LLM extraction | OpenAI parses scraped text only — no web_search tool, no hallucination |
-| Joblib cache | `get_flight_data` results cached to `.cache/`; cleared with `--update` flag |
+| Timezone handling | Flighty returns epoch seconds plus each airport's IANA zone; times are built with `zoneinfo` |
+| Protobuf codec | Schema-less decoder in `flighty_client.py`; fields are addressed by number, no `.proto` files |
+| Airline cache | Flighty's airline table cached to `.cache/flighty_airlines.json` for 7 days; cleared with `--update` |
 | Date formulas | Sheet columns `Date` and `Weekday` use Excel formulas, not raw values |
 
 ## Google Sheet Schema
@@ -133,15 +139,15 @@ flowchart LR
 | `Departure Time`, `Arrival Time` | string | With timezone offset, e.g., `14:30 (CET +1)` |
 | `Duration` | string | `HH:MM` format |
 | `Origin`, `Destination` | string | City names |
-| `airline`, `aircraft` | string | From scrape |
-| `departure_terminal`, `arrival_terminal` | string | From scrape |
+| `airline`, `aircraft` | string | From Flighty |
+| `departure_terminal`, `arrival_terminal` | string | From Flighty |
 | `departure_country`, `arrival_country` | string | Country names |
 
 ## External Dependencies
 
 | Service | Usage | Notes |
 |---------|-------|-------|
-| aviability.com | Flight schedule scraping | Unofficial, no API key needed; requires `uv run playwright install chromium` |
-| OpenAI API | Structured field extraction from scraped text | Requires `OPENAI_API_KEY` env var |
+| Flighty private API | Flight schedule lookup | Unofficial; needs two tokens from a traffic capture; daily search quota |
+| aviability.com + OpenAI | Alternative scraper fetcher | Not used by `main`; needs Playwright Chromium and `OPENAI_API_KEY` |
 | Google Sheets API | Read/write flight tracker | Requires service account |
 | Google Calendar API | Create/update events | Requires service account |

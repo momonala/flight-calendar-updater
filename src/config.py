@@ -24,6 +24,8 @@ SERVICE_ACCOUNT_FILE = _tool_config["service_account_file"]
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "")
 CALENDAR_ID = os.environ.get("CALENDAR_ID", "")
+FLIGHTY_AUTH_TOKEN = os.environ.get("FLIGHTY_AUTH_TOKEN", "")
+FLIGHTY_BUILD_TOKEN = os.environ.get("FLIGHTY_BUILD_TOKEN", "")
 
 # Google credentials — built only when the service account file is present (skipped in CI)
 _creds_path = Path(SERVICE_ACCOUNT_FILE)

@@ -30,11 +30,11 @@ def create_or_update_gcal_event(flight_info: FlightInfo, event_id: str | None) -
         "summary": event_description,
         "start": {
             "dateTime": start.isoformat(),
-            "timeZone": start.tzinfo.zone,
+            "timeZone": str(start.tzinfo),
         },
         "end": {
             "dateTime": end.isoformat(),
-            "timeZone": end.tzinfo.zone,
+            "timeZone": str(end.tzinfo),
         },
         "description": flight_info.as_gcal_description(),
     }

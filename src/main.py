@@ -5,7 +5,7 @@ import typer
 
 from src.calendar_client import create_or_update_gcal_event
 from src.datamodels import GSheetIndexedRow, GSheetRow
-from src.extract_flight_scrape import get_flight_info, memory
+from src.flighty_client import check_credentials, clear_cache, get_flight_info
 from src.sheets_client import fetch_flights_google_doc, update_row_with_formulas
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s", force=True)
@@ -109,11 +109,14 @@ app = typer.Typer()
 
 @app.command()
 def main(
-    update: bool = typer.Option(False, "--update", help="Clear the scrape cache and re-fetch fresh data")
+    update: bool = typer.Option(
+        False, "--update", help="Clear the Flighty airline cache and re-fetch fresh data"
+    )
 ):
+    check_credentials()
     if update:
-        logger.info("--update flag set: clearing scrape cache")
-        memory.clear()
+        logger.info("--update flag set: clearing Flighty airline cache")
+        clear_cache()
 
     rows = fetch_flights_google_doc()
     if not rows:
