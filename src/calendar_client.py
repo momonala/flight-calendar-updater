@@ -2,7 +2,8 @@ import logging
 
 from googleapiclient.discovery import build
 
-from src.config import CALENDAR_ID, google_credentials
+from src.config import google_credentials
+from src.env import CALENDAR_ID
 from src.datamodels import FlightInfo
 
 logger = logging.getLogger(__name__)

@@ -7,7 +7,7 @@ from openai import OpenAI
 
 from src.config import OPENAI_MODEL
 from src.datamodels import FlightInfo
-from src.values import OPENAI_API_KEY
+from src.env import OPENAI_API_KEY
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)

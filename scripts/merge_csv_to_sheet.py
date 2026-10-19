@@ -19,11 +19,12 @@ import pycountry
 from googleapiclient.discovery import build
 
 from src.sheets_client import fetch_flights_google_doc
-from src.values import SPREADSHEET_ID, credentials
+from src.config import google_credentials
+from src.env import SPREADSHEET_ID
 
 logger = logging.getLogger(__name__)
 
-_sheets_service = build("sheets", "v4", credentials=credentials, cache_discovery=False)
+_sheets_service = build("sheets", "v4", credentials=google_credentials, cache_discovery=False)
 _sheet = _sheets_service.spreadsheets()
 
 AIRPORTS = airportsdata.load("IATA")

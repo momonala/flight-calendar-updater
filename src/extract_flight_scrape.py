@@ -11,7 +11,8 @@ from joblib import Memory
 from openai import OpenAI
 from playwright.sync_api import Page, sync_playwright
 
-from src.config import OPENAI_API_KEY, OPENAI_MODEL
+from src.config import OPENAI_MODEL
+from src.env import OPENAI_API_KEY
 from src.datamodels import FlightInfo
 
 logger = logging.getLogger(__name__)

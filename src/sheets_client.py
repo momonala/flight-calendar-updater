@@ -2,7 +2,8 @@ import logging
 
 from googleapiclient.discovery import build
 
-from src.config import RANGE_NAME, SPREADSHEET_ID, google_credentials
+from src.config import RANGE_NAME, google_credentials
+from src.env import SPREADSHEET_ID
 from src.datamodels import GSheetRow
 
 logger = logging.getLogger(__name__)

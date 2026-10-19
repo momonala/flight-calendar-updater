@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from src.config import FLIGHTY_AUTH_TOKEN, FLIGHTY_BUILD_TOKEN
+from src.env import FLIGHTY_AUTH_TOKEN, FLIGHTY_BUILD_TOKEN
 from src.datamodels import FlightInfo
 
 logger = logging.getLogger(__name__)

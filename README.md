@@ -74,13 +74,14 @@ flight-calendar-updater/
 │   ├── calendar_client.py        # Google Calendar create/update logic
 │   ├── sheets_client.py          # Google Sheets read/write logic
 │   ├── scheduler.py              # Daily cron wrapper using schedule library
-│   └── config.py                 # All config and secrets (pyproject.toml + env vars)
+│   ├── config.py                 # Non-secret config (pyproject.toml) + Google credentials
+│   └── env.py                    # Secrets loaded from .env
 ├── tests/
 │   ├── conftest.py               # Shared fixtures
 │   ├── test_datamodels.py        # FlightInfo and GSheetRow validation tests
 │   ├── test_scraper.py           # Scraper and LLM extraction tests
 │   └── test_main.py              # Pipeline orchestration tests
-├── .env                          # Secrets: OPENAI_API_KEY, SPREADSHEET_ID, CALENDAR_ID (not committed)
+├── .env                          # Secrets: OpenAI, Sheet + Calendar IDs, Flighty tokens (not committed)
 ├── .env.example                  # Template for required env vars
 ├── google_application_credentials.json  # Service account key (not committed)
 ├── pyproject.toml                # Dependencies and non-secret config

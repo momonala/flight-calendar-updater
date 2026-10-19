@@ -1,11 +1,7 @@
-import os
 import tomllib
 from pathlib import Path
 
 import typer
-from dotenv import load_dotenv
-
-load_dotenv()
 
 _config_file = Path(__file__).parent.parent / "pyproject.toml"
 with _config_file.open("rb") as f:
@@ -19,13 +15,6 @@ OPENAI_MODEL = _tool_config["openai_model"]
 SCHEDULER_TRIGGER_TIME = _tool_config["scheduler_trigger_time"]
 RANGE_NAME = _tool_config["range_name"]
 SERVICE_ACCOUNT_FILE = _tool_config["service_account_file"]
-
-# From environment variables
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "")
-CALENDAR_ID = os.environ.get("CALENDAR_ID", "")
-FLIGHTY_AUTH_TOKEN = os.environ.get("FLIGHTY_AUTH_TOKEN", "")
-FLIGHTY_BUILD_TOKEN = os.environ.get("FLIGHTY_BUILD_TOKEN", "")
 
 # Google credentials — built only when the service account file is present (skipped in CI)
 _creds_path = Path(SERVICE_ACCOUNT_FILE)
