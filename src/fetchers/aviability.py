@@ -7,7 +7,6 @@ from datetime import datetime
 
 import airportsdata
 import pytz
-from joblib import Memory
 from openai import OpenAI
 from playwright.sync_api import Page, sync_playwright
 
@@ -16,7 +15,6 @@ from src.env import OPENAI_API_KEY
 from src.datamodels import FlightInfo
 
 logger = logging.getLogger(__name__)
-memory = Memory(location=".cache")
 
 _airports = airportsdata.load("IATA")
 
@@ -97,7 +95,7 @@ def _find_route_path(page: Page) -> str:
 def _scrape_main_html(flight_number: str, flight_date: str) -> str:
     """Navigate aviability.com to the flight detail page and return the <main> HTML."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=True, channel="chromium")
         page = browser.new_page()
         page.route("**/*fundingchoicesmessages.google.com*/**", lambda route: route.abort())
         try:
@@ -149,7 +147,6 @@ def _extract_with_llm(main_html: str) -> dict:
     return json.loads(text)
 
 
-@memory.cache
 def get_flight_data(flight_number: str, flight_date: str) -> dict:
     """Scrape aviability.com + LLM extraction → raw dict matching FlightInfo schema."""
     logger.debug("Fetching flight data for %s on %s", flight_number, flight_date)

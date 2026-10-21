@@ -6,7 +6,8 @@ import typer
 
 from src.calendar_client import create_or_update_gcal_event
 from src.datamodels import GSheetIndexedRow, GSheetRow
-from src.flighty_client import check_credentials, clear_cache, get_flight_info
+from src.fetchers import get_flight_info
+from src.fetchers.flighty import check_credentials, clear_cache
 from src.sheets_client import fetch_flights_google_doc, update_row_with_formulas
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s", force=True)

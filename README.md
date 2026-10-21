@@ -3,7 +3,7 @@
 [![CI](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml/badge.svg)](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/momonala/flight-calendar-updater/branch/main/graph/badge.svg)](https://codecov.io/gh/momonala/flight-calendar-updater)
 
-Syncs flight details from a Google Sheet to Google Calendar. Looks up schedules on Flighty's private protobuf API (reverse-engineered from the iOS app). The older aviability.com scraper and OpenAI extractor are kept in `src/extract_flight_scrape.py` and `src/extract_flight_ai.py` as alternative fetchers with the same `get_flight_info` contract.
+Syncs flight details from a Google Sheet to Google Calendar. Looks up schedules on Flighty's private protobuf API (reverse-engineered from the iOS app). When Flighty finds nothing or fails, it falls back to scraping aviability.com with Playwright and extracting the fields with OpenAI. Each source lives in `src/fetchers/` and exposes the same `get_flight_info(date, flight_number)` function; the order is set by `FETCHERS` in `src/fetchers/__init__.py`.
 
 ## Prerequisites
 
@@ -22,7 +22,7 @@ Syncs flight details from a Google Sheet to Google Calendar. Looks up schedules 
    cd flight-calendar-updater
    curl -LsSf https://astral.sh/uv/install.sh | sh
    uv sync
-   uv run playwright install chromium   # only if you switch back to the scraper
+   uv run playwright install chromium   # browser for the aviability.com fallback
    ```
 
 2. Set up Google credentials:
@@ -70,9 +70,11 @@ uv run python -m src.scheduler
 ```
 flight-calendar-updater/
 ├── src/
-│   ├── main.py                   # Entry point: orchestrates sheet read → Flighty lookup → calendar update
-│   ├── flighty_client.py         # Flighty private API client (protobuf wire codec, airline table, search)
-│   ├── extract_flight_scrape.py  # Alternative fetcher: Playwright scraper + OpenAI field extraction
+│   ├── main.py                   # Entry point: orchestrates sheet read → flight lookup → calendar update
+│   ├── fetchers/
+│   │   ├── __init__.py           # get_flight_info: tries each source in FETCHERS order
+│   │   ├── flighty.py            # Primary: Flighty private API (protobuf wire codec, airline table, search)
+│   │   └── aviability.py         # Fallback: Playwright scrape of aviability.com + OpenAI field extraction
 │   ├── datamodels.py             # Pydantic models: FlightInfo, GSheetRow
 │   ├── calendar_client.py        # Google Calendar create/update logic
 │   ├── sheets_client.py          # Google Sheets read/write logic
@@ -82,7 +84,9 @@ flight-calendar-updater/
 ├── tests/
 │   ├── conftest.py               # Shared fixtures
 │   ├── test_datamodels.py        # FlightInfo and GSheetRow validation tests
-│   ├── test_scraper.py           # Scraper and LLM extraction tests
+│   ├── test_fetchers.py          # Fallback order across sources
+│   ├── test_fetcher_flighty.py   # Flighty codec, cache and parsing tests
+│   ├── test_fetcher_aviability.py  # Scraper and LLM extraction tests
 │   └── test_main.py              # Pipeline orchestration tests
 ├── .env                          # Secrets: OpenAI, Sheet + Calendar IDs, Flighty tokens (not committed)
 ├── .env.example                  # Template for required env vars
@@ -99,12 +103,14 @@ flight-calendar-updater/
 flowchart LR
     subgraph External
         FL[api.flightyapp.com]
+        AV[aviability.com]
         GS[Google Sheets]
         GC[Google Calendar]
     end
     subgraph App
         M[src/main.py]
-        FC[src/flighty_client.py]
+        FC[src/fetchers/flighty.py]
+        AVC[src/fetchers/aviability.py]
         SCH[src/scheduler.py]
     end
 
@@ -114,6 +120,8 @@ flowchart LR
     FC -->|/v1/search protobuf| FL
     FL -->|airports, times, airline, aircraft, terminal| FC
     FC --> M
+    M -->|fallback when Flighty finds nothing| AVC
+    AVC -->|Playwright + OpenAI| AV
     M -->|create/update events| GC
     M -->|update row| GS
     SCH -->|daily @ scheduler_trigger_time| M
@@ -126,8 +134,8 @@ flowchart LR
 | `FlightInfo` | Pydantic model holding parsed flight data (times, airports, terminals, aircraft) |
 | `gcal_event_id` | Sheet column storing Calendar event ID for update vs. create logic |
 | Timezone handling | Flighty returns epoch seconds plus each airport's IANA zone; times are built with `zoneinfo` |
-| Protobuf codec | Schema-less decoder in `flighty_client.py`; fields are addressed by number, no `.proto` files |
-| Airline cache | Flighty's airline table cached to `.cache/flighty_airlines.json` for 7 days; cleared with `--update` |
+| Protobuf codec | Schema-less decoder in `fetchers/flighty.py`; fields are addressed by number, no `.proto` files |
+| Airline cache | Flighty's airline table cached to `.cache/flighty_airlines.json` for 7 days; cleared with `--clear-cache` |
 | Date formulas | Sheet columns `Date` and `Weekday` use Excel formulas, not raw values |
 
 ## Google Sheet Schema

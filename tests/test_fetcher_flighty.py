@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from src import flighty_client as fc
+from src.fetchers import flighty as fc
 from src.datamodels import FlightInfo
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "flighty_search_tk1730.bin"
@@ -81,3 +81,13 @@ def test_check_credentials_fails_fast_when_unset(monkeypatch):
     monkeypatch.setattr(fc, "FLIGHTY_AUTH_TOKEN", "")
     with pytest.raises(RuntimeError):
         fc.check_credentials()
+
+
+def test_get_flight_info_logs_http_error_as_one_line(monkeypatch, caplog):
+    def rate_limited(*_):
+        raise fc.requests.HTTPError("429 Client Error: Too Many Requests")
+
+    monkeypatch.setattr(fc, "search_flight", rate_limited)
+    assert fc.get_flight_info(datetime(2027, 1, 15), "GQ874") is None
+    assert [r.exc_info for r in caplog.records] == [None]
+    assert "429" in caplog.text

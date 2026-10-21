@@ -1,17 +1,8 @@
 from datetime import timedelta
 
-import pytest
 
-import src.extract_flight_scrape as scraper
-from src.extract_flight_scrape import _utc_to_local, get_flight_data, get_flight_info
-
-
-@pytest.fixture(autouse=True)
-def clear_cache():
-    scraper.memory.clear()
-    yield
-    scraper.memory.clear()
-
+import src.fetchers.aviability as scraper
+from src.fetchers.aviability import _utc_to_local, get_flight_data, get_flight_info
 
 # ── _utc_to_local ────────────────────────────────────────────────────────────
 

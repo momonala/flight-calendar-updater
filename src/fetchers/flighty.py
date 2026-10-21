@@ -281,10 +281,14 @@ def _flight_info_from_record(flight_number: str, flight: Msg) -> dict:
 
 
 def get_flight_info(date: datetime, flight_number: str) -> FlightInfo | None:
-    """Same contract as extract_flight_scrape.get_flight_info, backed by Flighty instead of a browser."""
+    """Look up one flight on Flighty; None when it is not found or the call fails."""
     flight_date = date.strftime("%Y-%m-%d")
     try:
         flight = search_flight(flight_number, flight_date)
+    except requests.RequestException as e:
+        logger.error("Flighty lookup failed for %s on %s: %s", flight_number, flight_date, e)
+        return None
+    try:
         if flight is None:
             logger.warning("Flighty has no %s on %s", flight_number, flight_date)
             return None
