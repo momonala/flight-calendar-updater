@@ -14,29 +14,42 @@ class TestShouldSkipRow:
     def test_missing_flight_number_skips(self):
         row = make_sheet_row(flight_number="")
         row.flight_number = None
-        assert main_module._should_skip_row(row) is True
+        assert main_module._should_skip_row(row, update_all=True) is True
 
     def test_missing_date_skips(self):
         row = make_sheet_row()
         row.date = None
-        assert main_module._should_skip_row(row) is True
+        assert main_module._should_skip_row(row, update_all=True) is True
 
     def test_before_cutoff_skips(self):
         row = make_sheet_row(date="Oct 01, 2024")
-        assert main_module._should_skip_row(row) is True
+        assert main_module._should_skip_row(row, update_all=True) is True
 
     def test_on_cutoff_date_skips(self):
         row = make_sheet_row(date="Sep 29, 2024")
-        assert main_module._should_skip_row(row) is True
+        assert main_module._should_skip_row(row, update_all=True) is True
 
     def test_past_date_skips(self):
         row = make_sheet_row(date="Jan 01, 2025")
-        assert main_module._should_skip_row(row) is True
+        assert main_module._should_skip_row(row, update_all=True) is True
 
     def test_future_date_is_processed(self, monkeypatch):
+        monkeypatch.setattr(main_module, "_is_in_the_past", lambda *_: False)
+        row = make_sheet_row(date="Jun 23, 2026")
+        assert main_module._should_skip_row(row, update_all=True) is False
+
+    def test_filled_row_skipped_by_default(self, monkeypatch):
         monkeypatch.setattr(main_module, "_is_in_the_past", lambda _: False)
         row = make_sheet_row(date="Jun 23, 2026")
-        assert main_module._should_skip_row(row) is False
+        row.departure_time = "10:00"
+        assert main_module._should_skip_row(row, update_all=False) is True
+
+    def test_unfilled_row_processed_by_default(self, monkeypatch):
+        monkeypatch.setattr(main_module, "_is_in_the_past", lambda _: False)
+        row = make_sheet_row(date="Jun 23, 2026")
+        row.departure_time = row.arrival_time = None
+        row.departure_airport = "ATH"
+        assert main_module._should_skip_row(row, update_all=False) is False
 
 
 class TestGetRowsForProcessing:
@@ -76,31 +89,31 @@ class TestGetRowsForProcessing:
         return rows
 
     def test_row_number_starts_at_two(self, monkeypatch):
-        monkeypatch.setattr(main_module, "_should_skip_row", lambda _: False)
+        monkeypatch.setattr(main_module, "_should_skip_row", lambda *_: False)
         rows = [
             _SHEET_HEADER,
             ["2026", "6", "23", "Tue", "Jun 23, 2026", "U2 2933"] + [None] * 17,
         ]
-        result = main_module._get_rows_for_processing(rows)
+        result = main_module._get_rows_for_processing(rows, update_all=True)
         assert result[0].row_number == 2
 
     def test_skipped_rows_excluded(self, monkeypatch):
-        monkeypatch.setattr(main_module, "_should_skip_row", lambda _: True)
+        monkeypatch.setattr(main_module, "_should_skip_row", lambda *_: True)
         rows = [
             _SHEET_HEADER,
             ["2026", "6", "23", "Tue", "Jun 23, 2026", "U2 2933"] + [None] * 17,
         ]
-        result = main_module._get_rows_for_processing(rows)
+        result = main_module._get_rows_for_processing(rows, update_all=True)
         assert result == []
 
     def test_row_number_accounts_for_header_offset(self, monkeypatch):
-        monkeypatch.setattr(main_module, "_should_skip_row", lambda _: False)
+        monkeypatch.setattr(main_module, "_should_skip_row", lambda *_: False)
         rows = [
             _SHEET_HEADER,
             ["2026", "6", "23", "Tue", "Jun 23, 2026", "U2 2933"] + [None] * 17,
             ["2026", "6", "24", "Wed", "Jun 24, 2026", "BY 6303"] + [None] * 17,
         ]
-        result = main_module._get_rows_for_processing(rows)
+        result = main_module._get_rows_for_processing(rows, update_all=True)
         assert [r.row_number for r in result] == [2, 3]
 
 

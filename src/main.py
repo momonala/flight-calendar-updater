@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from typing import Annotated
 
 import typer
 
@@ -29,9 +30,9 @@ def _is_before_or_on_cutoff(event_start: datetime) -> bool:
     return False
 
 
-def _has_gcal_event_id(gcal_event_id: str | None) -> bool:
-    if gcal_event_id and str(gcal_event_id).strip():
-        logger.debug(f"❌ skipping: gcal_event_id already set ({gcal_event_id!r})")
+def _is_already_filled(row: GSheetRow) -> bool:
+    if row.departure_time or row.arrival_time:
+        logger.debug(f"❌ skipping: already filled ({row.flight_number!r} on {row.date})")
         return True
     return False
 
@@ -43,24 +44,24 @@ def _is_in_the_past(event_start: datetime) -> bool:
     return False
 
 
-def _should_skip_row(row: GSheetRow) -> bool:
+def _should_skip_row(row: GSheetRow, update_all: bool) -> bool:
     if not _has_required_fields(row.date, row.flight_number):
         return True
     if _is_before_or_on_cutoff(row.date):
         return True
-    # if _has_gcal_event_id(row.gcal_event_id):
-    # return True
     if _is_in_the_past(row.date):
+        return True
+    if not update_all and _is_already_filled(row):
         return True
     return False
 
 
-def _get_rows_for_processing(rows: list) -> list[GSheetIndexedRow]:
+def _get_rows_for_processing(rows: list, update_all: bool) -> list[GSheetIndexedRow]:
     header, data_rows = rows[0], rows[1:]
     result = []
     for i, row in enumerate(data_rows):
         sheet_row = GSheetRow.from_sheet_row(header=header, values=row)
-        if not _should_skip_row(sheet_row):
+        if not _should_skip_row(sheet_row, update_all):
             result.append(GSheetIndexedRow(row_number=i + 2, row=sheet_row))
     return result
 
@@ -109,13 +110,16 @@ app = typer.Typer()
 
 @app.command()
 def main(
-    update: bool = typer.Option(
-        False, "--update", help="Clear the Flighty airline cache and re-fetch fresh data"
-    )
+    update: Annotated[
+        bool, typer.Option("--update", help="Re-fetch all future flights, not just unfilled rows")
+    ] = False,
+    clear_airline_cache: Annotated[
+        bool, typer.Option("--clear-cache", help="Clear the cached Flighty airline table")
+    ] = False,
 ):
     check_credentials()
-    if update:
-        logger.info("--update flag set: clearing Flighty airline cache")
+    if clear_airline_cache:
+        logger.info("--clear-cache flag set: clearing Flighty airline cache")
         clear_cache()
 
     rows = fetch_flights_google_doc()
@@ -123,7 +127,7 @@ def main(
         logger.warning("❌ Failed to fetch flights from Google Sheets.")
         return
 
-    rows_for_processing = _get_rows_for_processing(rows)
+    rows_for_processing = _get_rows_for_processing(rows, update_all=update)
     if not rows_for_processing:
         logger.info("%d rows in google sheet, but no new flights to process.", len(rows) - 1)
         return

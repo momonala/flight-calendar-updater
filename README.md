@@ -52,11 +52,14 @@ Syncs flight details from a Google Sheet to Google Calendar. Looks up schedules 
 ## Running
 
 ```bash
-# One-time run
+# One-time run: only look up future rows that have just a date and flight number
 uv run main
 
-# Clear the cached Flighty airline table (otherwise kept for 7 days)
+# Re-fetch every future flight (refreshes schedule changes; uses more of the Flighty quota)
 uv run main --update
+
+# Clear the cached Flighty airline table (otherwise kept for 7 days)
+uv run main --clear-cache
 
 # As daemon (runs daily at scheduler_trigger_time in pyproject.toml, default 10:00)
 uv run python -m src.scheduler
