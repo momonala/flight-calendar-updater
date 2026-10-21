@@ -52,6 +52,5 @@ def update_row_with_formulas(row_index: int, *, header: list[str], new_row: GShe
     ).execute()
 
     logger.info(
-        f"\033[92m✅ Row updated\033[0m | \033[94mRow:\033[0m {row_index_range} | "
-        f"\033[93mDate:\033[0m {dumped.get('Date')} | \033[96mFlight:\033[0m {dumped.get('Flight #')}"
+        f"✅ Row updated | Row: {row_index_range} | Date: {dumped.get('Date')} | Flight: {dumped.get('Flight #')}"
     )

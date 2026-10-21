@@ -1,4 +1,5 @@
 import logging
+import sys
 from datetime import datetime
 from typing import Annotated
 
@@ -10,7 +11,20 @@ from src.fetchers import get_flight_info
 from src.fetchers.flighty import check_credentials, clear_cache
 from src.sheets_client import fetch_flights_google_doc, update_row_with_formulas
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s", force=True)
+_LEVEL_COLORS = {logging.WARNING: "\033[33m", logging.ERROR: "\033[31m", logging.CRITICAL: "\033[31m"}
+
+
+class _ColorFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        line = super().format(record)
+        color = _LEVEL_COLORS.get(record.levelno)
+        return f"{color}{line}\033[0m" if color else line
+
+
+_handler = logging.StreamHandler()
+_log_format = "%(levelname)s: %(message)s"
+_handler.setFormatter(_ColorFormatter(_log_format) if sys.stderr.isatty() else logging.Formatter(_log_format))
+logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -106,7 +120,7 @@ def _process_flight(indexed_row: GSheetIndexedRow, header: list) -> None:
     update_row_with_formulas(indexed_row.row_number, header=header, new_row=new_row)
 
 
-app = typer.Typer()
+app = typer.Typer(add_completion=False)
 
 
 @app.command()
