@@ -1,7 +1,6 @@
 # Flight Calendar Updater
 
 [![CI](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml/badge.svg)](https://github.com/momonala/flight-calendar-updater/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/momonala/flight-calendar-updater/branch/main/graph/badge.svg)](https://codecov.io/gh/momonala/flight-calendar-updater)
 
 Syncs flight details from a Google Sheet to Google Calendar. Looks up schedules on Flighty's private protobuf API (reverse-engineered from the iOS app). When Flighty finds nothing or fails, it falls back to scraping aviability.com with Playwright and extracting the fields with OpenAI. Each source lives in `src/fetchers/` and exposes the same `get_flight_info(date, flight_number)` function; the order is set by `FETCHERS` in `src/fetchers/__init__.py`.
 
