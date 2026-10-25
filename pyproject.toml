@@ -8,19 +8,20 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "aniso8601>=10.0.1",
-    "pydantic>=2.0.0,<3.0.0",
-    "openai>=3.31.0",
-    "google-api-python-client>=2.0.0,<3.0.0",
-    "requests>=2.0.0,<3.0.0",
-    "playwright>=1.64.0",
     "airportsdata",
-    "pycountry>=24.0.0,<25.0.0",
-    "pytz",
-    "schedule",
+    "aniso8601>=10.0.1",
+    "google-api-python-client>=2.0.0,<3.0.0",
+    "google-auth>=2.62.0",
+    "openai>=3.31.0",
     "pandas>=3.0.6",
-    "typer>=0.27.3",
+    "playwright>=1.64.0",
+    "pycountry>=24.0.0,<25.0.0",
+    "pydantic>=2.0.0,<3.0.0",
     "python-dotenv>=1.2.4",
+    "pytz",
+    "requests>=2.0.0,<3.0.0",
+    "schedule",
+    "typer>=0.27.3",
 ]
 
 [tool.config]
@@ -33,14 +34,6 @@ service_account_file = "google_application_credentials.json"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[dependency-groups]
-dev = [
-    "black>=26.3.1,<27",
-    "pytest>=9.1.1",
-    "pytest-cov>=7.1.0",
-    "ruff>=0.15.7,<0.16",
-]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
