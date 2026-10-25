@@ -76,3 +76,13 @@ exclude_lines = [
 [tool.uv]
 exclude-newer = "1 week"
 exclude-newer-package = { certifi = false }
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF100", "PLW1510"]
+ignore = ["E501", "B008", "UP042"]
+
+[tool.ruff.lint.isort]
+force-single-line = true

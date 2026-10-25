@@ -22,8 +22,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from src.env import FLIGHTY_AUTH_TOKEN, FLIGHTY_BUILD_TOKEN
 from src.datamodels import FlightInfo
+from src.env import FLIGHTY_AUTH_TOKEN
+from src.env import FLIGHTY_BUILD_TOKEN
 
 logger = logging.getLogger(__name__)
 

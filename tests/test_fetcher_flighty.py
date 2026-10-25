@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from src.fetchers import flighty as fc
 from src.datamodels import FlightInfo
+from src.fetchers import flighty as fc
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "flighty_search_tk1730.bin"
 

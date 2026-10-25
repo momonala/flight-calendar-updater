@@ -5,7 +5,8 @@ import pytest
 
 import src.main as main_module
 from src.datamodels import GSheetIndexedRow
-from tests.conftest import _SHEET_HEADER, make_sheet_row
+from tests.conftest import _SHEET_HEADER
+from tests.conftest import make_sheet_row
 
 # ── row filtering ────────────────────────────────────────────────────────────
 

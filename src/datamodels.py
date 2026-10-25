@@ -1,12 +1,16 @@
 """Pydantic models for flight extraction."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 
 import airportsdata
 import aniso8601
 import pycountry
 import pytz
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic import field_validator
+from pydantic import model_validator
 
 airports = airportsdata.load("IATA")
 

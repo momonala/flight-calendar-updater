@@ -18,9 +18,9 @@ import pandas as pd
 import pycountry
 from googleapiclient.discovery import build
 
-from src.sheets_client import fetch_flights_google_doc
 from src.config import google_credentials
 from src.env import SPREADSHEET_ID
+from src.sheets_client import fetch_flights_google_doc
 
 logger = logging.getLogger(__name__)
 

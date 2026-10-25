@@ -1,10 +1,13 @@
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 
 import pytest
 from pydantic import ValidationError
 
-from src.datamodels import FlightInfo, GSheetRow
-from tests.conftest import _SHEET_HEADER, make_sheet_row
+from src.datamodels import FlightInfo
+from src.datamodels import GSheetRow
+from tests.conftest import _SHEET_HEADER
+from tests.conftest import make_sheet_row
 
 
 class TestFlightInfoCountryValidator:

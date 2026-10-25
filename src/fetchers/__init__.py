@@ -4,7 +4,8 @@ from collections.abc import Callable
 from datetime import datetime
 
 from src.datamodels import FlightInfo
-from src.fetchers import aviability, flighty
+from src.fetchers import aviability
+from src.fetchers import flighty
 
 Fetcher = Callable[[datetime, str], FlightInfo | None]
 

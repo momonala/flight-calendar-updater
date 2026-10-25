@@ -1,6 +1,7 @@
 import pytest
 
-from src.datamodels import FlightInfo, GSheetRow
+from src.datamodels import FlightInfo
+from src.datamodels import GSheetRow
 
 _FLIGHT_RAW = {
     "flight_number": "U2 2933",

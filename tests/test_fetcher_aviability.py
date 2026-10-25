@@ -1,8 +1,9 @@
 from datetime import timedelta
 
-
 import src.fetchers.aviability as scraper
-from src.fetchers.aviability import _utc_to_local, get_flight_data, get_flight_info
+from src.fetchers.aviability import _utc_to_local
+from src.fetchers.aviability import get_flight_data
+from src.fetchers.aviability import get_flight_info
 
 # ── _utc_to_local ────────────────────────────────────────────────────────────
 

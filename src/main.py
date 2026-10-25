@@ -6,10 +6,13 @@ from typing import Annotated
 import typer
 
 from src.calendar_client import create_or_update_gcal_event
-from src.datamodels import GSheetIndexedRow, GSheetRow
+from src.datamodels import GSheetIndexedRow
+from src.datamodels import GSheetRow
 from src.fetchers import get_flight_info
-from src.fetchers.flighty import check_credentials, clear_cache
-from src.sheets_client import fetch_flights_google_doc, update_row_with_formulas
+from src.fetchers.flighty import check_credentials
+from src.fetchers.flighty import clear_cache
+from src.sheets_client import fetch_flights_google_doc
+from src.sheets_client import update_row_with_formulas
 
 _LEVEL_COLORS = {logging.WARNING: "\033[33m", logging.ERROR: "\033[31m", logging.CRITICAL: "\033[31m"}
 
@@ -66,9 +69,7 @@ def _should_skip_row(row: GSheetRow, update_all: bool) -> bool:
         return True
     if _is_in_the_past(row.date):
         return True
-    if not update_all and _is_already_filled(row):
-        return True
-    return False
+    return not update_all and _is_already_filled(row)
 
 
 def _get_rows_for_processing(rows: list, update_all: bool) -> list[GSheetIndexedRow]:
