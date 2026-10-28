@@ -49,10 +49,7 @@ def _is_before_or_on_cutoff(event_start: datetime) -> bool:
 
 
 def _is_already_filled(row: GSheetRow) -> bool:
-    if row.departure_time or row.arrival_time:
-        logger.debug(f"❌ skipping: already filled ({row.flight_number!r} on {row.date})")
-        return True
-    return False
+    return bool(row.departure_time or row.arrival_time)
 
 
 def _is_in_the_past(event_start: datetime) -> bool:
@@ -69,7 +66,10 @@ def _should_skip_row(row: GSheetRow, update_all: bool) -> bool:
         return True
     if _is_in_the_past(row.date):
         return True
-    return not update_all and _is_already_filled(row)
+    if not update_all and _is_already_filled(row):
+        logger.debug(f"skipping: already filled ({row.flight_number!r} on {row.date})")
+        return True
+    return False
 
 
 def _get_rows_for_processing(rows: list, update_all: bool) -> list[GSheetIndexedRow]:
@@ -80,6 +80,26 @@ def _get_rows_for_processing(rows: list, update_all: bool) -> list[GSheetIndexed
         if not _should_skip_row(sheet_row, update_all):
             result.append(GSheetIndexedRow(row_number=i + 2, row=sheet_row))
     return result
+
+
+def _confirm_update(row: GSheetRow, position: str) -> bool:
+    summary = (
+        f"[{position}] {row.date:%a %b %d, %Y}  {row.flight_number}  "
+        f"{row.departure_airport} {row.departure_time} -> {row.arrival_airport} {row.arrival_time}"
+    )
+    typer.echo(f"{summary}  [u]pdate / [s]kip: ", nl=False)
+    while (key := typer.getchar().lower()) not in ("u", "s"):
+        pass
+    typer.echo(key)
+    return key == "u"
+
+
+def _select_rows_to_update(rows: list[GSheetIndexedRow]) -> list[GSheetIndexedRow]:
+    filled = [r for r in rows if _is_already_filled(r.row)]
+    confirmed = {
+        r.row_number for i, r in enumerate(filled, 1) if _confirm_update(r.row, f"{i}/{len(filled)}")
+    }
+    return [r for r in rows if not _is_already_filled(r.row) or r.row_number in confirmed]
 
 
 def _build_updated_row(row: GSheetRow, flight_info, event_id: str) -> GSheetRow:
@@ -127,12 +147,20 @@ app = typer.Typer(add_completion=False)
 @app.command()
 def main(
     update: Annotated[
-        bool, typer.Option("--update", help="Re-fetch all future flights, not just unfilled rows")
+        bool,
+        typer.Option(
+            "--update", help="Also re-fetch future flights that are already filled, asking u/s for each"
+        ),
+    ] = False,
+    update_all: Annotated[
+        bool, typer.Option("--all", help="With --update: re-fetch every filled flight without asking")
     ] = False,
     clear_airline_cache: Annotated[
         bool, typer.Option("--clear-cache", help="Clear the cached Flighty airline table")
     ] = False,
 ):
+    if update_all and not update:
+        raise typer.BadParameter("--all only applies together with --update", param_hint="--all")
     check_credentials()
     if clear_airline_cache:
         logger.info("--clear-cache flag set: clearing Flighty airline cache")
@@ -144,6 +172,8 @@ def main(
         return
 
     rows_for_processing = _get_rows_for_processing(rows, update_all=update)
+    if update and not update_all:
+        rows_for_processing = _select_rows_to_update(rows_for_processing)
     if not rows_for_processing:
         logger.info("%d rows in google sheet, but no new flights to process.", len(rows) - 1)
         return

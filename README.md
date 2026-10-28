@@ -54,8 +54,11 @@ Syncs flight details from a Google Sheet to Google Calendar. Looks up schedules 
 # One-time run: only look up future rows that have just a date and flight number
 uv run main
 
-# Re-fetch every future flight (refreshes schedule changes; uses more of the Flighty quota)
+# Also refresh future flights that are already filled: press u to update or s to skip each one
 uv run main --update
+
+# Refresh every future flight without asking (uses more of the Flighty quota)
+uv run main --update --all
 
 # Clear the cached Flighty airline table (otherwise kept for 7 days)
 uv run main --clear-cache

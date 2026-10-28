@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest.mock import MagicMock
 
 import pytest
+from typer.testing import CliRunner
 
 import src.main as main_module
 from src.datamodels import GSheetIndexedRow
@@ -176,3 +177,39 @@ class TestProcessFlight:
         update_mock.assert_called_once()
         call_kwargs = update_mock.call_args
         assert call_kwargs.kwargs["new_row"].gcal_event_id == "evt999"
+
+
+# ── interactive update selection ─────────────────────────────────────────────
+
+
+class TestSelectRowsToUpdate:
+    def _indexed(self, row_number: int, filled: bool) -> GSheetIndexedRow:
+        row = make_sheet_row()
+        row.departure_time = "10:00" if filled else None
+        row.arrival_time = None
+        return GSheetIndexedRow(row_number=row_number, row=row)
+
+    def test_keeps_unfilled_and_confirmed_rows(self, monkeypatch):
+        keys = iter(["x", "U", "s"])
+        monkeypatch.setattr(main_module.typer, "getchar", lambda: next(keys))
+        rows = [self._indexed(2, filled=False), self._indexed(3, filled=True), self._indexed(4, filled=True)]
+
+        result = main_module._select_rows_to_update(rows)
+
+        assert [r.row_number for r in result] == [2, 3]
+
+    def test_does_not_prompt_for_unfilled_rows(self, monkeypatch):
+        getchar = MagicMock()
+        monkeypatch.setattr(main_module.typer, "getchar", getchar)
+
+        result = main_module._select_rows_to_update([self._indexed(2, filled=False)])
+
+        assert [r.row_number for r in result] == [2]
+        getchar.assert_not_called()
+
+
+class TestMainFlags:
+    def test_all_without_update_is_rejected(self):
+        result = CliRunner().invoke(main_module.app, ["--all"])
+        assert result.exit_code != 0
+        assert "--update" in result.output
