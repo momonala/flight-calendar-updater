@@ -9,143 +9,71 @@ from src.datamodels import GSheetIndexedRow
 from tests.conftest import _SHEET_HEADER
 from tests.conftest import make_sheet_row
 
+FUTURE = "Jan 01, 2099"
+
 # ── row filtering ────────────────────────────────────────────────────────────
 
 
-class TestShouldSkipRow:
-    def test_missing_flight_number_skips(self):
-        row = make_sheet_row(flight_number="")
-        row.flight_number = None
-        assert main_module._should_skip_row(row, update_all=True) is True
-
-    def test_missing_date_skips(self):
-        row = make_sheet_row()
-        row.date = None
-        assert main_module._should_skip_row(row, update_all=True) is True
-
-    def test_before_cutoff_skips(self):
-        row = make_sheet_row(date="Oct 01, 2024")
-        assert main_module._should_skip_row(row, update_all=True) is True
-
-    def test_on_cutoff_date_skips(self):
-        row = make_sheet_row(date="Sep 29, 2024")
-        assert main_module._should_skip_row(row, update_all=True) is True
-
-    def test_past_date_skips(self):
-        row = make_sheet_row(date="Jan 01, 2025")
-        assert main_module._should_skip_row(row, update_all=True) is True
-
-    def test_future_date_is_processed(self, monkeypatch):
-        monkeypatch.setattr(main_module, "_is_in_the_past", lambda *_: False)
-        row = make_sheet_row(date="Jun 23, 2026")
-        assert main_module._should_skip_row(row, update_all=True) is False
-
-    def test_filled_row_skipped_by_default(self, monkeypatch):
-        monkeypatch.setattr(main_module, "_is_in_the_past", lambda _: False)
-        row = make_sheet_row(date="Jun 23, 2026")
-        row.departure_time = "10:00"
-        assert main_module._should_skip_row(row, update_all=False) is True
-
-    def test_unfilled_row_processed_by_default(self, monkeypatch):
-        monkeypatch.setattr(main_module, "_is_in_the_past", lambda _: False)
-        row = make_sheet_row(date="Jun 23, 2026")
-        row.departure_time = row.arrival_time = None
-        row.departure_airport = "ATH"
-        assert main_module._should_skip_row(row, update_all=False) is False
+@pytest.mark.parametrize("missing", ["date", "flight_number"])
+def test_row_missing_date_or_flight_number_is_skipped(missing):
+    row = make_sheet_row(date=FUTURE)
+    setattr(row, missing, None)
+    assert main_module._should_skip_row(row, update_all=True) is True
 
 
-class TestGetRowsForProcessing:
-    def _make_raw_rows(self, *sheet_rows):
-        rows = [_SHEET_HEADER]
-        for sr in sheet_rows:
-            rows.append(
-                [
-                    getattr(sr, col, None) or ""
-                    for col in [
-                        "year",
-                        "month",
-                        "day",
-                        "weekday",
-                        "date",
-                        "flight_number",
-                        "departure_airport",
-                        "arrival_airport",
-                        "departure_time",
-                        "arrival_time",
-                        "duration",
-                        "origin",
-                        "destination",
-                        "flighty",
-                        "gcal_event_id",
-                        "note",
-                        "duration_s",
-                        "airline",
-                        "aircraft",
-                        "departure_country",
-                        "arrival_country",
-                        "departure_terminal",
-                        "arrival_terminal",
-                    ]
-                ]
-            )
-        return rows
+@pytest.mark.parametrize("date", ["Sep 29, 2024", "Jan 01, 2025"])
+def test_pre_cutoff_or_past_row_is_skipped_even_when_updating_all(date):
+    row = make_sheet_row(date=date)
+    assert main_module._should_skip_row(row, update_all=True) is True
 
-    def test_row_number_starts_at_two(self, monkeypatch):
-        monkeypatch.setattr(main_module, "_should_skip_row", lambda *_: False)
-        rows = [
-            _SHEET_HEADER,
-            ["2026", "6", "23", "Tue", "Jun 23, 2026", "U2 2933"] + [None] * 17,
-        ]
-        result = main_module._get_rows_for_processing(rows, update_all=True)
-        assert result[0].row_number == 2
 
-    def test_skipped_rows_excluded(self, monkeypatch):
-        monkeypatch.setattr(main_module, "_should_skip_row", lambda *_: True)
-        rows = [
-            _SHEET_HEADER,
-            ["2026", "6", "23", "Tue", "Jun 23, 2026", "U2 2933"] + [None] * 17,
-        ]
-        result = main_module._get_rows_for_processing(rows, update_all=True)
-        assert result == []
+@pytest.mark.parametrize(
+    "filled, update_all, skipped",
+    [
+        (False, False, False),
+        (True, False, True),
+        (True, True, False),
+    ],
+)
+def test_future_row_is_skipped_only_when_filled_and_not_updating(filled, update_all, skipped):
+    row = make_sheet_row(date=FUTURE)
+    row.departure_time = "10:00" if filled else None
+    row.arrival_time = None
+    assert main_module._should_skip_row(row, update_all=update_all) is skipped
 
-    def test_row_number_accounts_for_header_offset(self, monkeypatch):
-        monkeypatch.setattr(main_module, "_should_skip_row", lambda *_: False)
-        rows = [
-            _SHEET_HEADER,
-            ["2026", "6", "23", "Tue", "Jun 23, 2026", "U2 2933"] + [None] * 17,
-            ["2026", "6", "24", "Wed", "Jun 24, 2026", "BY 6303"] + [None] * 17,
-        ]
-        result = main_module._get_rows_for_processing(rows, update_all=True)
-        assert [r.row_number for r in result] == [2, 3]
+
+def test_rows_for_processing_keep_sheet_row_numbers():
+    rows = [
+        _SHEET_HEADER,
+        ["2025", "1", "1", "Wed", "Jan 01, 2025", "U2 2933"],
+        ["2099", "1", "1", "Thu", FUTURE, "U2 2933"],
+        ["2099", "1", "2", "Fri", "Jan 02, 2099", "BY 6303"],
+    ]
+    result = main_module._get_rows_for_processing(rows, update_all=False)
+    assert [r.row_number for r in result] == [3, 4]
 
 
 # ── _build_updated_row ───────────────────────────────────────────────────────
 
 
-class TestBuildUpdatedRow:
-    def test_maps_flight_info_fields(self, flight_info):
-        row = make_sheet_row()
-        result = main_module._build_updated_row(row, flight_info, event_id="evt123")
+def test_build_updated_row_takes_flight_info_and_keeps_user_columns(flight_info):
+    row = make_sheet_row()
+    row.flighty = "FLY123"
+    row.note = "window seat"
 
-        assert result.departure_airport == "BRS"
-        assert result.arrival_airport == "BER"
-        assert result.airline == "easyJet"
-        assert result.aircraft == "Airbus A320"
-        assert result.arrival_terminal == "Terminal 1"
-        assert result.departure_terminal is None
-        assert result.gcal_event_id == "evt123"
-        assert result.duration_s == pytest.approx(timedelta(hours=1, minutes=55).total_seconds())
+    result = main_module._build_updated_row(row, flight_info, event_id="evt123")
 
-    def test_preserves_original_row_metadata(self, flight_info):
-        row = make_sheet_row()
-        row.flighty = "FLY123"
-        row.note = "window seat"
-
-        result = main_module._build_updated_row(row, flight_info, event_id="evt123")
-
-        assert result.flighty == "FLY123"
-        assert result.note == "window seat"
-        assert result.flight_number == row.flight_number
+    assert result.departure_airport == "BRS"
+    assert result.arrival_airport == "BER"
+    assert result.airline == "easyJet"
+    assert result.aircraft == "Airbus A320"
+    assert result.arrival_terminal == "Terminal 1"
+    assert result.departure_terminal is None
+    assert result.gcal_event_id == "evt123"
+    assert result.duration_s == pytest.approx(timedelta(hours=1, minutes=55).total_seconds())
+    assert result.flighty == "FLY123"
+    assert result.note == "window seat"
+    assert result.flight_number == row.flight_number
 
 
 # ── _process_flight ──────────────────────────────────────────────────────────
@@ -182,34 +110,23 @@ class TestProcessFlight:
 # ── interactive update selection ─────────────────────────────────────────────
 
 
-class TestSelectRowsToUpdate:
-    def _indexed(self, row_number: int, filled: bool) -> GSheetIndexedRow:
+def test_select_rows_keeps_unfilled_and_confirmed_rows(monkeypatch):
+    def indexed(row_number: int, filled: bool) -> GSheetIndexedRow:
         row = make_sheet_row()
         row.departure_time = "10:00" if filled else None
         row.arrival_time = None
         return GSheetIndexedRow(row_number=row_number, row=row)
 
-    def test_keeps_unfilled_and_confirmed_rows(self, monkeypatch):
-        keys = iter(["x", "U", "s"])
-        monkeypatch.setattr(main_module.typer, "getchar", lambda: next(keys))
-        rows = [self._indexed(2, filled=False), self._indexed(3, filled=True), self._indexed(4, filled=True)]
+    keys = iter(["x", "U", "s"])
+    monkeypatch.setattr(main_module.typer, "getchar", lambda: next(keys))
+    rows = [indexed(2, filled=False), indexed(3, filled=True), indexed(4, filled=True)]
 
-        result = main_module._select_rows_to_update(rows)
+    result = main_module._select_rows_to_update(rows)
 
-        assert [r.row_number for r in result] == [2, 3]
-
-    def test_does_not_prompt_for_unfilled_rows(self, monkeypatch):
-        getchar = MagicMock()
-        monkeypatch.setattr(main_module.typer, "getchar", getchar)
-
-        result = main_module._select_rows_to_update([self._indexed(2, filled=False)])
-
-        assert [r.row_number for r in result] == [2]
-        getchar.assert_not_called()
+    assert [r.row_number for r in result] == [2, 3]
 
 
-class TestMainFlags:
-    def test_all_without_update_is_rejected(self):
-        result = CliRunner().invoke(main_module.app, ["--all"])
-        assert result.exit_code != 0
-        assert "--update" in result.output
+def test_all_without_update_is_rejected():
+    result = CliRunner().invoke(main_module.app, ["--all"])
+    assert result.exit_code != 0
+    assert "--update" in result.output

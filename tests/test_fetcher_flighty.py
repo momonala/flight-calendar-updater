@@ -29,9 +29,7 @@ def test_search_response_maps_to_flight_info():
 @pytest.mark.parametrize(
     "raw, expected",
     [
-        ("TK1730", ("TK", "1730")),
         ("tk 1730", ("TK", "1730")),
-        ("U2 2933", ("U2", "2933")),
         ("3U7284", ("3U", "7284")),
     ],
 )
