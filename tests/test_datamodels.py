@@ -38,10 +38,11 @@ def test_string_times_are_localized_to_each_airport_timezone(flight_info):
     assert flight_info.arrival_time.minute == 50
 
 
-def test_formatted_duration(flight_info_raw):
-    flight_info_raw["duration"] = "PT10H5M"
+@pytest.mark.parametrize("iso, expected", [("PT1H55M", "01:55"), ("PT10H5M", "10:05")])
+def test_formatted_duration(flight_info_raw, iso, expected):
+    flight_info_raw["duration"] = iso
     fi = FlightInfo.model_validate(flight_info_raw)
-    assert fi.formatted_duration == "10:05"
+    assert fi.formatted_duration == expected
 
 
 class TestGSheetRow:

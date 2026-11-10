@@ -19,3 +19,7 @@ def test_stops_at_first_source_that_finds_the_flight(monkeypatch, flight_info):
 def test_returns_none_when_every_source_finds_nothing(monkeypatch):
     monkeypatch.setattr(fetchers, "FETCHERS", (lambda d, fn: None, lambda d, fn: None))
     assert fetchers.get_flight_info(datetime(2026, 6, 23), "U2 2933") is None
+
+
+def test_flighty_is_tried_before_aviability():
+    assert (fetchers.flighty.get_flight_info, fetchers.aviability.get_flight_info) == fetchers.FETCHERS
