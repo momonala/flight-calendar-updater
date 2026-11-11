@@ -286,7 +286,7 @@ def get_flight_info(date: datetime, flight_number: str) -> FlightInfo | None:
     flight_date = date.strftime("%Y-%m-%d")
     try:
         flight = search_flight(flight_number, flight_date)
-    except requests.RequestException as e:
+    except (requests.RequestException, ValueError) as e:
         logger.error("Flighty lookup failed for %s on %s: %s", flight_number, flight_date, e)
         return None
     try:

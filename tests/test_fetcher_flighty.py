@@ -42,6 +42,10 @@ def test_split_flight_number_rejects_garbage():
         fc._split_flight_number("TK")
 
 
+def test_unparseable_flight_number_is_a_miss_not_a_crash():
+    assert fc.get_flight_info(datetime(2026, 10, 3), "TK") is None
+
+
 def test_codec_round_trips_search_request():
     body = (
         fc._field(1, fc._field(1, "uuid") + fc._field(2, "1730"))
